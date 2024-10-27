@@ -1,0 +1,11 @@
+[package]
+name = "xui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+femtovg = "0.10.1"
+winit = "0.28.6"
+glutin = "0.30.10"
+glutin-winit = "0.3.0"
+raw-window-handle = "0.5.2"
