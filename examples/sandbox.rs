@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::num::NonZeroU32;
-
+use bevy_reflect::Reflect;
 use femtovg::renderer::OpenGl;
 use femtovg::{Canvas, Color, FillRule, Paint, Path, Renderer};
 use glutin::surface::Surface;
@@ -20,6 +20,11 @@ use glutin::{
     prelude::*,
     surface::{SurfaceAttributesBuilder, WindowSurface},
 };
+
+#[derive(Debug, Reflect)]
+struct AppState {
+    counter: i32,
+}
 
 fn main() {
     println!("Starting XUI");
