@@ -1,21 +1,26 @@
 use std::marker::PhantomData;
 use bevy_reflect::{GetPath, ParsedPath, Reflect};
 
-pub struct ObservableState<T: Reflect> {
-    value: T,
+pub struct ObservableState {
+    value: Box<dyn Reflect>,
     changes: Vec<Change>,
 }
 
-impl <T: Reflect> ObservableState<T> {
-    pub fn new(value: T) -> Self {
-        Self { value, changes: Vec::new() }
+impl ObservableState {
+    pub fn new<T: Reflect>(value: T) -> Self {
+        Self { value: Box::new(value), changes: Vec::new() }
     }
 
-    pub fn state(&self) -> &T {
-        &self.value
+    pub fn state(&self) -> &dyn Reflect {
+        &*self.value
     }
 
-    pub fn apply_change(&mut self, label: impl Into<String>, mutation: impl Fn(&mut Mutator<T>)) {
+    pub fn inspect<T: Reflect>(&self, path: TypedPath<T>) -> &T {
+        self.value.path(&path.path).unwrap()
+    }
+
+
+    pub fn apply_change(&mut self, label: impl Into<String>, mutation: impl Fn(&mut Mutator)) {
         let mut mutator = Mutator {
             label: label.into(),
             state: self
@@ -30,9 +35,9 @@ impl <T: Reflect> ObservableState<T> {
     }
 }
 
-pub struct Mutator<'a, T: Reflect> {
+pub struct Mutator<'a> {
     label: String,
-    state: &'a mut ObservableState<T>,
+    state: &'a mut ObservableState,
 }
 
 pub struct TypedPath<T: Reflect> {
@@ -45,7 +50,7 @@ impl <T: Reflect> TypedPath<T> {
     }
 }
 
-impl <'a, T: Reflect> Mutator<'a, T> {
+impl <'a> Mutator<'a> {
     pub fn mutate<V: Reflect>(&mut self, path: &TypedPath<V>, f: impl Fn(&mut V)) {
         let t = self.state.value.path_mut::<V>(&path.path).unwrap();
         let old_value = t.clone_value();

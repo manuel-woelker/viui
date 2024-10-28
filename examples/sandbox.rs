@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::num::NonZeroU32;
-use bevy_reflect::Reflect;
+use bevy_reflect::{GetPath, ParsedPath, Reflect};
 use femtovg::renderer::OpenGl;
 use femtovg::{Canvas, Color, FillRule, Paint, Path, Renderer};
 use glutin::surface::Surface;
@@ -20,11 +20,14 @@ use glutin::{
     prelude::*,
     surface::{SurfaceAttributesBuilder, WindowSurface},
 };
+use xui::observable_state::{ObservableState, TypedPath};
+use xui::widget_model::{Text, TextPart, TextWidget, Widget, WidgetKind, WidgetModel};
 
 #[derive(Debug, Reflect)]
 struct AppState {
     counter: i32,
 }
+
 
 fn main() {
     println!("Starting XUI");
@@ -40,7 +43,22 @@ fn main() {
     canvas.add_font("assets/fonts/Roboto-Regular.ttf").unwrap();
 
     let mut mouse_position = PhysicalPosition::new(0., 0.);
-    let mut counter = 0;
+    let mut counter = 19;
+
+
+    let mut app_state = ObservableState::new(AppState { counter });
+    let counter_path = TypedPath::<i32>::new(ParsedPath::parse("counter").unwrap());
+
+    let widget_model = WidgetModel {
+        widgets: vec![Widget {
+            kind: WidgetKind::Text(TextWidget {
+                text: Text {
+                    parts: vec![TextPart::FixedText("Counter: ".to_string()),
+                                TextPart::VariableText("counter".to_string()),]
+                }
+            })
+        }],
+    };
 
     event_loop.run(move |event, _target, control_flow| match event {
         Event::WindowEvent { event, .. } => match event {
@@ -50,13 +68,16 @@ fn main() {
             }
             WindowEvent::MouseInput { state: ElementState::Pressed, button: MouseButton::Left, .. } => {
                 counter+=1;
+                app_state.apply_change("Increment", |mutator| {
+                    mutator.mutate(&counter_path, |counter| *counter+=1);
+                });
                 window.request_redraw();
             }
             WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
             _ => {}
         },
         Event::RedrawRequested(_) => {
-            render(&context, &surface, &window, &mut canvas, mouse_position, counter);
+            render(&context, &surface, &window, &mut canvas, &widget_model, &app_state, mouse_position, counter);
         }
         _ => {}
     })
@@ -105,6 +126,8 @@ fn render<T: Renderer>(
     surface: &Surface<WindowSurface>,
     window: &Window,
     canvas: &mut Canvas<T>,
+    widget_model: &WidgetModel,
+    app_state: &ObservableState,
     square_position: PhysicalPosition<f64>,
     counter: i32,
 ) {
@@ -114,6 +137,24 @@ fn render<T: Renderer>(
 
     canvas.clear_rect(0, 0, size.width, size.height, Color::white());
 
+    for widget in &widget_model.widgets {
+        match &widget.kind { WidgetKind::Text(text_widget) => {
+            let mut text = "".to_string();
+            for part in &text_widget.text.parts {
+                match part {
+                    TextPart::FixedText(fixed_string) => {
+                        text.push_str(fixed_string);
+                    }
+                    TextPart::VariableText(path) => {
+                        text.push_str(&format!("{:?}", app_state.state().reflect_path(&**path).unwrap()));
+                    }
+                }
+            }
+            canvas.fill_text(140.0, 140.0, text, &Paint::color(Color::hsl(0.0, 0.0, 0.0)).with_font_size(18.0).with_anti_alias(true)).unwrap();
+        } }
+    }
+
+/*
     // Make smol red rectangle
     canvas.clear_rect(
         square_position.x as u32,
@@ -141,7 +182,7 @@ fn render<T: Renderer>(
     canvas.fill_path(&path, &Paint::color(Color::hsl(0.5, 0.5, 0.5)));
     canvas.stroke_path(&path, &Paint::color(Color::hsl(0.5, 0.5, 0.0)));
     canvas.fill_text(140.0, 140.0, format!("Increment {counter}"), &Paint::color(Color::hsl(0.0, 0.0, 0.0)).with_font_size(18.0).with_anti_alias(true)).unwrap();
-
+*/
     // Tell renderer to execute all drawing commands
     canvas.flush();
     // Display what we've just rendered
