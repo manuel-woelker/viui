@@ -1,3 +1,5 @@
+use std::any::{Any, TypeId};
+use std::collections::HashMap;
 use std::fs::File;
 use std::num::NonZeroU32;
 use bevy_reflect::{GetPath, ParsedPath, Reflect};
@@ -21,7 +23,7 @@ use glutin::{
     surface::{SurfaceAttributesBuilder, WindowSurface},
 };
 use xui::observable_state::{ObservableState, TypedPath};
-use xui::widget_model::{Text, TextPart, TextWidget, Widget, WidgetKind, WidgetModel};
+use xui::widget_model::{Text, TextPart, TextWidget, Widget, WidgetModel};
 
 #[derive(Debug, Reflect)]
 struct AppState {
@@ -50,14 +52,27 @@ fn main() {
     let counter_path = TypedPath::<i32>::new(ParsedPath::parse("counter").unwrap());
 
     let widget_model = WidgetModel {
-        widgets: vec![Widget {
-            kind: WidgetKind::Text(TextWidget {
+        widgets: vec![
+            Box::new(TextWidget {
                 text: Text {
                     parts: vec![TextPart::FixedText("Counter: ".to_string()),
-                                TextPart::VariableText("counter".to_string()),]
+                                TextPart::VariableText("counter".to_string()), ]
                 }
-            })
-        }],
+            }),
+/*            Box::new(ButtonWidget {
+                    text: Text {
+                        parts: vec![TextPart::FixedText("Increment".to_string())]
+                    }
+                })
+            },*/
+            Box::new(TextWidget {
+                    text: Text {
+                        parts: vec![TextPart::FixedText("We were clicked ".to_string()),
+                                    TextPart::VariableText("counter".to_string()),
+                                    TextPart::FixedText(" times.".to_string()),]
+                    }
+                }),
+        ],
     };
 
     event_loop.run(move |event, _target, control_flow| match event {
@@ -67,9 +82,9 @@ fn main() {
                 window.request_redraw();
             }
             WindowEvent::MouseInput { state: ElementState::Pressed, button: MouseButton::Left, .. } => {
-                counter+=1;
+                counter += 1;
                 app_state.apply_change("Increment", |mutator| {
-                    mutator.mutate(&counter_path, |counter| *counter+=1);
+                    mutator.mutate(&counter_path, |counter| *counter += 1);
                 });
                 window.request_redraw();
             }
@@ -131,60 +146,97 @@ fn render<T: Renderer>(
     square_position: PhysicalPosition<f64>,
     counter: i32,
 ) {
+
+    let mut render_registry = HashMap::new();
+    render_registry.insert(TypeId::of::<TextWidget>(), |canvas: &mut Canvas<T>, widget: &dyn Widget| {
+        let text_widget = widget.as_any().downcast_ref::<TextWidget>().unwrap();
+        let string = text_to_string(&app_state, &text_widget.text.parts);
+        canvas.fill_text(140.0, 0.0, string, &Paint::color(Color::hsl(0.0, 0.0, 0.0)).with_font_size(18.0).with_anti_alias(true)).unwrap();
+    });
     // Make sure the canvas has the right size:
     let size = window.inner_size();
     canvas.set_size(size.width, size.height, window.scale_factor() as f32);
-
+    canvas.reset_transform();
     canvas.clear_rect(0, 0, size.width, size.height, Color::white());
-
+    let line_height = 30.0;
+    let mut ypos = 40.0;
     for widget in &widget_model.widgets {
-        match &widget.kind { WidgetKind::Text(text_widget) => {
-            let mut text = "".to_string();
-            for part in &text_widget.text.parts {
-                match part {
-                    TextPart::FixedText(fixed_string) => {
-                        text.push_str(fixed_string);
-                    }
-                    TextPart::VariableText(path) => {
-                        text.push_str(&format!("{:?}", app_state.state().reflect_path(&**path).unwrap()));
-                    }
-                }
+        canvas.translate(0.0, line_height);
+        let renderer = render_registry.get(&widget.as_any().type_id()).unwrap();
+        renderer(canvas, &**widget);
+/*        match &widget.kind {
+            WidgetKind::Text(text_widget) => {
+                let string = text_to_string(&app_state, &text_widget.text.parts);
+                canvas.fill_text(140.0, ypos, string, &Paint::color(Color::hsl(0.0, 0.0, 0.0)).with_font_size(18.0).with_anti_alias(true)).unwrap();
             }
-            canvas.fill_text(140.0, 140.0, text, &Paint::color(Color::hsl(0.0, 0.0, 0.0)).with_font_size(18.0).with_anti_alias(true)).unwrap();
-        } }
+            WidgetKind::Button(button_widget) => {
+                let string = text_to_string(&app_state, &button_widget.text.parts);
+                let mut path = Path::new();
+                let corner_radius = 10.0;
+                path.rounded_rect_varying(
+                    120.0,
+                    ypos-line_height+line_height/3.0,
+                    200.0,
+                    line_height,
+                    corner_radius,
+                    corner_radius,
+                    corner_radius,
+                    corner_radius,
+                );
+                canvas.stroke_path(&path, &Paint::color(Color::hsl(0.5, 0.5, 0.0)));
+                canvas.fill_text(140.0, ypos, string, &Paint::color(Color::hsl(0.0, 0.0, 0.0)).with_font_size(18.0).with_anti_alias(true)).unwrap();
+            }
+        }
+*/
+        ypos += line_height;
     }
 
-/*
-    // Make smol red rectangle
-    canvas.clear_rect(
-        square_position.x as u32,
-        square_position.y as u32,
-        30,
-        30,
-        Color::rgbf(1., 0., 0.),
-    );
-//    canvas.clear_rect(140, 140, 40, 40, Color::rgbf(1., 0., 0.));
-    let mut path = Path::new();
-    let corner_radius = 10.0;
-    path.rounded_rect_varying(
-        120.0,
-        120.0,
-        200.0,
-        100.0,
-        corner_radius,
-        corner_radius,
-        corner_radius,
-        corner_radius,
-    );
-    canvas.translate(5.0, 5.0);
-    canvas.fill_path(&path, &Paint::color(Color::hsl(0.5, 0.0, 0.8)));
-    canvas.reset();
-    canvas.fill_path(&path, &Paint::color(Color::hsl(0.5, 0.5, 0.5)));
-    canvas.stroke_path(&path, &Paint::color(Color::hsl(0.5, 0.5, 0.0)));
-    canvas.fill_text(140.0, 140.0, format!("Increment {counter}"), &Paint::color(Color::hsl(0.0, 0.0, 0.0)).with_font_size(18.0).with_anti_alias(true)).unwrap();
-*/
+    /*
+        // Make smol red rectangle
+        canvas.clear_rect(
+            square_position.x as u32,
+            square_position.y as u32,
+            30,
+            30,
+            Color::rgbf(1., 0., 0.),
+        );
+    //    canvas.clear_rect(140, 140, 40, 40, Color::rgbf(1., 0., 0.));
+        let mut path = Path::new();
+        let corner_radius = 10.0;
+        path.rounded_rect_varying(
+            120.0,
+            120.0,
+            200.0,
+            100.0,
+            corner_radius,
+            corner_radius,
+            corner_radius,
+            corner_radius,
+        );
+        canvas.translate(5.0, 5.0);
+        canvas.fill_path(&path, &Paint::color(Color::hsl(0.5, 0.0, 0.8)));
+        canvas.reset();
+        canvas.fill_path(&path, &Paint::color(Color::hsl(0.5, 0.5, 0.5)));
+        canvas.stroke_path(&path, &Paint::color(Color::hsl(0.5, 0.5, 0.0)));
+        canvas.fill_text(140.0, 140.0, format!("Increment {counter}"), &Paint::color(Color::hsl(0.0, 0.0, 0.0)).with_font_size(18.0).with_anti_alias(true)).unwrap();
+    */
     // Tell renderer to execute all drawing commands
     canvas.flush();
     // Display what we've just rendered
     surface.swap_buffers(context).expect("Could not swap buffers");
+}
+
+fn text_to_string(app_state: &&ObservableState, text: &Vec<TextPart>) -> String {
+    let mut string = "".to_string();
+    for part in text {
+        match part {
+            TextPart::FixedText(fixed_string) => {
+                string.push_str(fixed_string);
+            }
+            TextPart::VariableText(path) => {
+                string.push_str(&format!("{:?}", app_state.state().reflect_path(&**path).unwrap()));
+            }
+        }
+    }
+    string
 }
