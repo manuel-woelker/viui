@@ -22,8 +22,9 @@ use glutin::{
     prelude::*,
     surface::{SurfaceAttributesBuilder, WindowSurface},
 };
+use rstar::primitives::Rectangle;
 use xui::observable_state::{ObservableState, TypedPath};
-use xui::widget_model::{Text, TextPart, TextWidget, Widget, WidgetModel};
+use xui::widget_model::{Text, TextPart, WidgetState, WidgetModel, ButtonWidgetProps, WidgetProps, WidgetRegistry, ButtonWidget};
 
 #[derive(Debug, Reflect)]
 struct AppState {
@@ -31,8 +32,18 @@ struct AppState {
 }
 
 
+struct RectEntry {
+    rect: Rectangle<(f32, f32)>,
+    index: isize,
+}
+
+struct UiState {
+    rect_list: Vec<RectEntry>,
+}
+
 fn main() {
     println!("Starting XUI");
+//    dbg!(&b);
     let event_loop = EventLoop::new();
     let (context, gl_display, window, surface) = create_window(&event_loop);
 
@@ -50,23 +61,25 @@ fn main() {
 
     let mut app_state = ObservableState::new(AppState { counter });
     let counter_path = TypedPath::<i32>::new(ParsedPath::parse("counter").unwrap());
-
+    let mut ui_state = UiState { rect_list: Vec::new() };
+    let mut widget_registry = WidgetRegistry::new();
+    widget_registry.register_widget::<ButtonWidget>();
+    let mut first_button =widget_registry.make_widget_props("button");
+    let text = first_button.path_mut::<Text>("#0").unwrap();
+    *text = Text {
+        parts: vec![TextPart::FixedText("The Counter: ".to_string()),
+                    TextPart::VariableText("counter".to_string()), ]
+    };
     let widget_model = WidgetModel {
         widgets: vec![
-            Box::new(TextWidget {
-                text: Text {
-                    parts: vec![TextPart::FixedText("Counter: ".to_string()),
-                                TextPart::VariableText("counter".to_string()), ]
-                }
+            first_button,
+            Box::new(ButtonWidgetProps {
+                label: Text {
+                        parts: vec![TextPart::FixedText("Increment".to_string())],
+                    },
             }),
-/*            Box::new(ButtonWidget {
-                    text: Text {
-                        parts: vec![TextPart::FixedText("Increment".to_string())]
-                    }
-                })
-            },*/
-            Box::new(TextWidget {
-                    text: Text {
+            Box::new(ButtonWidgetProps {
+                label: Text {
                         parts: vec![TextPart::FixedText("We were clicked ".to_string()),
                                     TextPart::VariableText("counter".to_string()),
                                     TextPart::FixedText(" times.".to_string()),]
@@ -92,7 +105,7 @@ fn main() {
             _ => {}
         },
         Event::RedrawRequested(_) => {
-            render(&context, &surface, &window, &mut canvas, &widget_model, &app_state, mouse_position, counter);
+            render(&context, &surface, &window, &mut canvas, &widget_model, &app_state, &mut ui_state, mouse_position, counter);
         }
         _ => {}
     })
@@ -143,25 +156,48 @@ fn render<T: Renderer>(
     canvas: &mut Canvas<T>,
     widget_model: &WidgetModel,
     app_state: &ObservableState,
+    ui_state: &mut UiState,
     square_position: PhysicalPosition<f64>,
     counter: i32,
 ) {
-
-    let mut render_registry = HashMap::new();
-    render_registry.insert(TypeId::of::<TextWidget>(), |canvas: &mut Canvas<T>, widget: &dyn Widget| {
+    let mut rect_list = vec![];
+    let line_height = 50.0;
+    let mut render_registry: HashMap<TypeId, Box<dyn Fn(&mut Canvas<T>, &dyn WidgetProps)>> = HashMap::new();
+/*    render_registry.insert(TypeId::of::<TextWidget>(), Box::new(|canvas: &mut Canvas<T>, widget: &dyn WidgetState| {
         let text_widget = widget.as_any().downcast_ref::<TextWidget>().unwrap();
         let string = text_to_string(&app_state, &text_widget.text.parts);
         canvas.fill_text(140.0, 0.0, string, &Paint::color(Color::hsl(0.0, 0.0, 0.0)).with_font_size(18.0).with_anti_alias(true)).unwrap();
-    });
+    }));*/
+    render_registry.insert(TypeId::of::<ButtonWidgetProps>(), Box::new(|canvas: &mut Canvas<T>, widget: &dyn WidgetProps| {
+        let text_widget = widget.as_any().downcast_ref::<ButtonWidgetProps>().unwrap();
+        let mut path = Path::new();
+        let corner_radius = 10.0;
+        path.rounded_rect(
+            120.0,
+            -0.7*line_height,
+            400.0,
+            line_height,
+            corner_radius,
+        );
+        canvas.stroke_path(&path, &Paint::color(Color::hsl(0.5, 0.5, 0.0)));
+
+        let string = text_to_string(&app_state, &text_widget.label.parts);
+        canvas.fill_text(140.0, 0.0, string, &Paint::color(Color::hsl(0.0, 0.0, 0.0)).with_font_size(18.0).with_anti_alias(true)).unwrap();
+    }));
     // Make sure the canvas has the right size:
     let size = window.inner_size();
     canvas.set_size(size.width, size.height, window.scale_factor() as f32);
     canvas.reset_transform();
     canvas.clear_rect(0, 0, size.width, size.height, Color::white());
-    let line_height = 30.0;
     let mut ypos = 40.0;
+    let mut index = 0isize;
     for widget in &widget_model.widgets {
         canvas.translate(0.0, line_height);
+        rect_list.push(RectEntry {
+            index,
+            rect: Rectangle::from_corners((0.0, ypos), (200.0, ypos+line_height)),
+        });
+        index +=1;
         let renderer = render_registry.get(&widget.as_any().type_id()).unwrap();
         renderer(canvas, &**widget);
 /*        match &widget.kind {
