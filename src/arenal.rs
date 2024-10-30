@@ -25,7 +25,7 @@ struct Occupied<T> {
 struct Empty {
 }
 
-struct Idx<T> {
+pub struct Idx<T> {
     arenal_id: ArenalId,
     generation: Generation,
     offset: OffsetType,
@@ -56,12 +56,16 @@ impl <T> Arenal<T> {
         index
     }
 
+    pub fn entries(&mut self) -> impl Iterator<Item = &mut T> {
+        self.entries.iter_mut().filter_map(|item| if let Entry::Occupied(o) = item { Some(&mut o.value) } else { None })
+    }
+
 
 }
 
-impl <T> Index<Idx<T>> for Arenal<T> {
+impl <T> Index<&Idx<T>> for Arenal<T> {
     type Output = T;
-    fn index(&self, idx: Idx<T>) -> &T {
+    fn index(&self, idx: &Idx<T>) -> &T {
         let entry = &self.entries[idx.offset as usize];
         let Entry::Occupied(Occupied { value, generation }) = entry else {
             panic!("not occupied");
