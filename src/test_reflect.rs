@@ -3,7 +3,6 @@
 mod tests {
     use bevy_reflect::{GetField, GetPath, ParsedPath, Reflect, ReflectPath, Struct, TypeRegistry};
     use bevy_reflect::serde::ReflectSerializer;
-    use crate::add;
 
     fn mutate<S: Reflect, T: Reflect>(state: &mut S, path: &str, f: impl Fn(&mut T)) {
         let mut registry = TypeRegistry::default();

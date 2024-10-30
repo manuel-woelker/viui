@@ -75,7 +75,7 @@ pub struct Change {
 
 #[cfg(test)]
 mod tests {
-    use bevy_reflect::{ParsedPath, Reflect};
+    use bevy_reflect::{GetPath, ParsedPath, Reflect};
     use crate::observable_state::{ObservableState, TypedPath};
 
     #[derive(Debug, Reflect)]
@@ -90,13 +90,13 @@ mod tests {
             todos: vec!["Buy milk".to_string()],
         });
         let counter_path = &TypedPath::<i32>::new(ParsedPath::parse("counter").unwrap());
-        assert_eq!(19, state.state().counter);
+        assert_eq!(19, *state.state().path("counter").unwrap());
         state.apply_change("Increment counter", |mutator| {
             mutator.mutate(counter_path,|counter| *counter+=1);
         });
-        assert_eq!(20, state.state().counter);
+        assert_eq!(20, *state.state().path("counter").unwrap());
         dbg!(&state.changes);
         state.undo();
-        assert_eq!(19, state.state().counter);
+        assert_eq!(19, *state.state().path("counter").unwrap());
     }
 }

@@ -1,0 +1,3 @@
+vertical
+	label text="Counter: ${counter}"
+	button label="Increment" onclick="increment"

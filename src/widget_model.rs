@@ -18,11 +18,11 @@ pub struct Widget {
 }
 */
 
-pub trait WidgetState: Reflect {
+pub trait WidgetState: Reflect + 'static {
 
 }
 
-pub trait WidgetProps: Reflect {
+pub trait WidgetProps: Reflect + 'static {
 
 }
 
