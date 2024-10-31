@@ -56,10 +56,13 @@ impl <T> Arenal<T> {
         index
     }
 
-    pub fn entries(&mut self) -> impl Iterator<Item = &mut T> {
+    pub fn entries_mut(&mut self) -> impl Iterator<Item = &mut T> {
         self.entries.iter_mut().filter_map(|item| if let Entry::Occupied(o) = item { Some(&mut o.value) } else { None })
     }
 
+    pub fn entries(&self) -> impl Iterator<Item = &T> {
+        self.entries.iter().filter_map(|item| if let Entry::Occupied(o) = item { Some(&o.value) } else { None })
+    }
 
 }
 

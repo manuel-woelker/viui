@@ -1,6 +1,7 @@
 use std::any::TypeId;
 use crate::arenal::{Arenal, Idx};
-use crate::geometry::{Point, Rect};
+use crate::render::command::RenderCommand;
+use crate::types::{Point, Rect};
 use crate::widget_model::{ButtonWidgetProps, Widget, WidgetEventHandler, WidgetProps, WidgetRegistry, WidgetState};
 
 pub type StateBox = Box<dyn WidgetState>;
@@ -33,8 +34,12 @@ impl WidgetData {
         self.state.as_any_mut().downcast_mut::<T>().unwrap()
     }
 
-    pub fn cast_state_and_props<S: 'static, P: 'static>(&mut self) -> (&mut S, &P) {
+    pub fn cast_state_mut_and_props<S: 'static, P: 'static>(&mut self) -> (&mut S, &P) {
         (self.state.as_any_mut().downcast_mut::<S>().unwrap(), self.props.as_any().downcast_ref::<P>().unwrap())
+    }
+
+    pub fn cast_state_and_props<S: 'static, P: 'static>(&self) -> (&S, &P) {
+        (self.state.as_any().downcast_ref::<S>().unwrap(), self.props.as_any().downcast_ref::<P>().unwrap())
     }
 
     pub fn set_bounds(&mut self, bounds: Rect) {
@@ -43,6 +48,10 @@ impl WidgetData {
 
     pub fn bounds(&self) -> &Rect {
         &self.bounds
+    }
+
+    pub fn kind_index(&self) -> usize {
+        self.kind_index
     }
 }
 
@@ -72,7 +81,7 @@ impl UI {
     }
 
     pub fn widgets(&mut self) -> impl Iterator<Item = &mut WidgetData> {
-        self.state_arena.entries()
+        self.state_arena.entries_mut()
     }
 
     pub fn handle_ui_event(&mut self, event: UiEvent) {
@@ -81,9 +90,9 @@ impl UI {
                 if let Some(hovered_widget) = &self.hovered_widget {
                     let widget = &self.state_arena[hovered_widget];
                 }
-                for widget in self.state_arena.entries() {
+                for widget in self.state_arena.entries_mut() {
                     self.widget_registry.handle_event(widget.kind_index, WidgetEvent::mouse_out(), widget);
-                    if widget.bounds.contains(&position) {
+                    if widget.bounds.contains(position) {
                         self.widget_registry.handle_event(widget.kind_index, WidgetEvent::mouse_over(), widget);
 //                        break;
                     }
@@ -95,6 +104,18 @@ impl UI {
     pub fn register_widget<T: Widget>(&mut self) {
         self.widget_registry.register_widget::<T>();
     }
+
+    pub fn make_render_commands(&self) -> Vec<RenderCommand> {
+        let mut render_commands: Vec<RenderCommand> = Vec::new();
+        for widget in self.state_arena.entries() {
+            render_commands.push(RenderCommand::Save);
+            self.widget_registry.render_widget(&mut render_commands, widget);
+            render_commands.push(RenderCommand::Restore);
+            render_commands.push(RenderCommand::Translate {x: 0.0, y: 40.0})
+        }
+        render_commands
+    }
+
 
 }
 

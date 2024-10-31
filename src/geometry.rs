@@ -1,5 +1,5 @@
 
-
+/*
 #[derive(Debug, Default)]
 pub struct Point {
     pub x: f32,
@@ -49,3 +49,4 @@ impl Rect {
     }
 
 }
+*/

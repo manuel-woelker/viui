@@ -23,8 +23,10 @@ use glutin::{
     surface::{SurfaceAttributesBuilder, WindowSurface},
 };
 use rstar::primitives::Rectangle;
-use viui::geometry::{Point, Rect};
 use viui::observable_state::{ObservableState, TypedPath};
+use viui::render::femtovg_renderer::FemtovgRenderer;
+use viui::render::renderer::CommandRenderer;
+use viui::types::{Point, Rect, Size};
 use viui::ui::{UiEvent, WidgetData, WidgetEvent, WidgetEventKind, UI};
 use viui::widget_model::{Text, TextPart, WidgetState, WidgetModel, ButtonWidgetProps, WidgetProps, WidgetRegistry, ButtonWidget, ButtonWidgetState};
 
@@ -67,16 +69,23 @@ fn main() {
     let mut widget_registry = WidgetRegistry::new();
     widget_registry.register_widget::<ButtonWidget>();
     let mut first_button =widget_registry.make_widget_props("button");
-    let text = first_button.path_mut::<Text>("#0").unwrap();
+/*    let text = first_button.path_mut::<Text>("#0").unwrap();
     *text = Text {
         parts: vec![TextPart::FixedText("The Counter: ".to_string()),
                     TextPart::VariableText("counter".to_string()), ]
-    };
+    };*/
     let mut ui = UI::new();
     ui.register_widget::<ButtonWidget>();
 
-
     let _button_idx = ui.add_widget("button", ButtonWidgetState::default(), ButtonWidgetProps {
+        label: "Increment".to_string(),
+    }, );
+    ui.add_widget("button", ButtonWidgetState::default(), ButtonWidgetProps {
+        label: "Counter".to_string(),
+    });
+
+
+/*    let _button_idx = ui.add_widget("button", ButtonWidgetState::default(), ButtonWidgetProps {
         label: Text {
             parts: vec![TextPart::FixedText("Increment".to_string())],
         },
@@ -88,6 +97,8 @@ fn main() {
                         TextPart::FixedText(" times.".to_string()),]
         }
     });
+
+ */
 /*    let widget_model = WidgetModel {
         widgets: vec![
             first_button,
@@ -179,6 +190,14 @@ fn render<T: Renderer>(
     square_position: PhysicalPosition<f64>,
     counter: i32,
 ) {
+    let render_commands = ui.make_render_commands();
+
+    let size = window.inner_size();
+    canvas.set_size(size.width, size.height, window.scale_factor() as f32);
+    canvas.reset_transform();
+    canvas.clear_rect(0, 0, size.width, size.height, Color::white());
+    FemtovgRenderer::new(canvas).render(&render_commands);
+    /*
     let line_height = 50.0;
     let mut render_registry: HashMap<TypeId, Box<dyn Fn(&mut Canvas<T>, &WidgetData)>> = HashMap::new();
 /*    render_registry.insert(TypeId::of::<TextWidget>(), Box::new(|canvas: &mut Canvas<T>, widget: &dyn WidgetState| {
@@ -208,14 +227,10 @@ fn render<T: Renderer>(
         canvas.fill_text(10.0, bounds.height()/2.0, string, &Paint::color(Color::hsl(0.0, 0.0, 0.0)).with_text_baseline(Baseline::Middle).with_font_size(20.0).with_anti_alias(true)).unwrap();
     }));
     // Make sure the canvas has the right size:
-    let size = window.inner_size();
-    canvas.set_size(size.width, size.height, window.scale_factor() as f32);
-    canvas.reset_transform();
-    canvas.clear_rect(0, 0, size.width, size.height, Color::white());
     let mut ypos = 40.0;
     let mut index = 0isize;
     for widget in ui.widgets() {
-        widget.set_bounds(Rect::new(50.0, ypos, 400.0, line_height));
+        widget.set_bounds(Rect::new(Point::new(50.0, ypos), Size::new(400.0, line_height)));
         let bounds = widget.bounds();
         canvas.reset_transform();
         canvas.translate(bounds.upper_left.x, bounds.upper_left.y);
@@ -282,7 +297,7 @@ fn render<T: Renderer>(
         canvas.stroke_path(&path, &Paint::color(Color::hsl(0.5, 0.5, 0.0)));
         canvas.fill_text(140.0, 140.0, format!("Increment {counter}"), &Paint::color(Color::hsl(0.0, 0.0, 0.0)).with_font_size(18.0).with_anti_alias(true)).unwrap();
     */
-    // Tell renderer to execute all drawing commands
+    // Tell renderer to execute all drawing commands*/
     canvas.flush();
     // Display what we've just rendered
     surface.swap_buffers(context).expect("Could not swap buffers");

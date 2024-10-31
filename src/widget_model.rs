@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use bevy_reflect::{Reflect, Typed};
 use default_boxed::DefaultBoxed;
 use femtovg::Canvas;
+use crate::render::command::RenderCommand;
+use crate::types::{Color, Point, Rect, Size};
 use crate::ui::{WidgetData, WidgetEvent, WidgetEventKind};
 
 pub struct WidgetModel {
@@ -22,6 +24,7 @@ pub trait WidgetProps: Reflect + 'static {
 }
 
 pub type WidgetEventHandler = Box<dyn Fn(WidgetEvent, &mut WidgetData)>;
+pub type WidgetRenderFn = Box<dyn Fn(&mut Vec<RenderCommand>, &WidgetData)>;
 
 
 
@@ -29,6 +32,7 @@ pub struct WidgetDescriptor {
     make_state: Box<dyn Fn() -> Box<dyn WidgetState>>,
     make_props: Box<dyn Fn() -> Box<dyn WidgetProps>>,
     event_handler: WidgetEventHandler,
+    render_fn: WidgetRenderFn,
 }
 
 pub struct WidgetRegistry {
@@ -44,20 +48,23 @@ impl WidgetRegistry {
         }
     }
 
-    pub fn register(&mut self, name: impl Into<String>, make_state: impl Fn() -> Box<dyn WidgetState> + 'static, make_props: impl Fn() -> Box<dyn WidgetProps> + 'static, event_handler: impl Fn(WidgetEvent, &mut WidgetData) + 'static) {
-        self.register_internal(name.into(), Box::new(make_state), Box::new(make_props), Box::new(event_handler));
+    pub fn register(&mut self, name: impl Into<String>, make_state: impl Fn() -> Box<dyn WidgetState> + 'static, make_props: impl Fn() -> Box<dyn WidgetProps> + 'static, event_handler: impl Fn(WidgetEvent, &mut WidgetData) + 'static, render_fn: impl Fn(&mut Vec<RenderCommand>, &WidgetData) + 'static) {
+        self.register_internal(name.into(), Box::new(make_state), Box::new(make_props), Box::new(event_handler), Box::new(render_fn));
     }
 
-    fn register_internal(&mut self, name: String, make_state: Box<dyn Fn() -> Box<dyn WidgetState>>, make_props: Box<dyn Fn() -> Box<dyn WidgetProps>>, event_handler: WidgetEventHandler) {
+    fn register_internal(&mut self, name: String, make_state: Box<dyn Fn() -> Box<dyn WidgetState>>, make_props: Box<dyn Fn() -> Box<dyn WidgetProps>>, event_handler: WidgetEventHandler, render_fn: WidgetRenderFn) {
         let index = self.widgets.len();
-        self.widgets.push(WidgetDescriptor { event_handler, make_state, make_props });
+        self.widgets.push(WidgetDescriptor { event_handler, render_fn, make_state, make_props });
         self.widget_map.insert(name, index);
     }
 
     pub fn register_widget<T: Widget>(&mut self) {
         self.register(T::NAME, || Box::new(T::State::default()), || Box::new(T::Props::default()), Box::new(|event: WidgetEvent, widget_data: &mut WidgetData| {
-            let (state, props) = widget_data.cast_state_and_props::<T::State, T::Props>();
+            let (state, props) = widget_data.cast_state_mut_and_props::<T::State, T::Props>();
             T::handle_event(&event, state, props);
+        }), Box::new(|render_queue: &mut Vec<RenderCommand>, widget_data: &WidgetData| {
+            let (state, props) = widget_data.cast_state_and_props::<T::State, T::Props>();
+            T::render_widget(render_queue, state, props);
         }));
     }
 
@@ -77,6 +84,9 @@ impl WidgetRegistry {
         *self.widget_map.get(kind).unwrap()
     }
 
+    pub fn render_widget(&self, render_queue: &mut Vec<RenderCommand>, widget_data: &WidgetData) {
+        (self.widgets[widget_data.kind_index()].render_fn)(render_queue, widget_data);
+    }
 
 }
 
@@ -86,6 +96,7 @@ pub trait Widget {
     type Props: WidgetProps + Default;
 
     fn handle_event(event: &WidgetEvent, state: &mut Self::State, props: &Self::Props);
+    fn render_widget(render_queue: &mut Vec<RenderCommand>, state: &Self::State, props: &Self::Props);
 }
 
 pub struct ButtonWidget {}
@@ -106,11 +117,25 @@ impl Widget for ButtonWidget {
             }
         }
     }
+
+    fn render_widget(render_queue: &mut Vec<RenderCommand>, state: &Self::State, props: &Self::Props) {
+        if state.is_hovering {
+            render_queue.push(RenderCommand::SetFillColor(Color::new(255, 2, 255, 255)));
+        } else {
+            render_queue.push(RenderCommand::SetFillColor(Color::new(220, 220, 220, 255)));
+        }
+        render_queue.push(RenderCommand::FillRoundRect {
+            rect: Rect::new(Point::new(0.0,0.0), Size::new(100.0, 40.0)),
+            radius: 5.0,
+        });
+        render_queue.push(RenderCommand::Translate {x: 10.0, y: 20.0});
+        render_queue.push(RenderCommand::DrawText(props.label.clone()));
+    }
 }
 
 #[derive(Default, Reflect, Debug)]
 pub struct ButtonWidgetProps {
-    pub label: Text,
+    pub label: String,
 }
 
 impl WidgetProps for ButtonWidgetProps {}
