@@ -73,13 +73,15 @@ fn main() {
                     TextPart::VariableText("counter".to_string()), ]
     };
     let mut ui = UI::new();
-    let _button_idx = ui.add_widget("button".to_string(), ButtonWidgetState::default(), ButtonWidgetProps {
+    ui.register_widget::<ButtonWidget>();
+
+
+    let _button_idx = ui.add_widget("button", ButtonWidgetState::default(), ButtonWidgetProps {
         label: Text {
             parts: vec![TextPart::FixedText("Increment".to_string())],
         },
     }, );
-    ui.register_widget::<ButtonWidget>();
-    ui.add_widget("button".to_string(), ButtonWidgetState::default(), ButtonWidgetProps {
+    ui.add_widget("button", ButtonWidgetState::default(), ButtonWidgetProps {
         label: Text {
             parts: vec![TextPart::FixedText("We were clicked ".to_string()),
                         TextPart::VariableText("counter".to_string()),

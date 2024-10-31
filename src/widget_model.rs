@@ -32,13 +32,15 @@ pub struct WidgetDescriptor {
 }
 
 pub struct WidgetRegistry {
-    pub widgets: HashMap<String, WidgetDescriptor>,
+    pub widgets: Vec<WidgetDescriptor>,
+    pub widget_map: HashMap<String, usize>,
 }
 
 impl WidgetRegistry {
     pub fn new() -> Self {
         Self {
-            widgets: HashMap::new(),
+            widgets: Vec::new(),
+            widget_map: HashMap::new(),
         }
     }
 
@@ -47,7 +49,9 @@ impl WidgetRegistry {
     }
 
     fn register_internal(&mut self, name: String, make_state: Box<dyn Fn() -> Box<dyn WidgetState>>, make_props: Box<dyn Fn() -> Box<dyn WidgetProps>>, event_handler: WidgetEventHandler) {
-        self.widgets.insert(name, WidgetDescriptor { event_handler, make_state, make_props });
+        let index = self.widgets.len();
+        self.widgets.push(WidgetDescriptor { event_handler, make_state, make_props });
+        self.widget_map.insert(name, index);
     }
 
     pub fn register_widget<T: Widget>(&mut self) {
@@ -57,13 +61,22 @@ impl WidgetRegistry {
         }));
     }
 
-    pub fn make_widget_props(&self, name: &str) -> Box<dyn WidgetProps>{
-        (self.widgets.get(name).unwrap().make_props)()
+    pub fn get_widget_by_name(&self, name: &str) -> &WidgetDescriptor {
+        &self.widgets[*self.widget_map.get(name).unwrap()]
     }
 
-    pub fn handle_event(&self, widget_kind: &str, event: WidgetEvent, widget_data: &mut WidgetData) {
-        (self.widgets.get(widget_kind).unwrap().event_handler)(event, widget_data);
+    pub fn make_widget_props(&self, name: &str) -> Box<dyn WidgetProps>{
+        (self.get_widget_by_name(name).make_props)()
     }
+
+    pub fn handle_event(&self, widget_index: usize, event: WidgetEvent, widget_data: &mut WidgetData) {
+        (self.widgets[widget_index].event_handler)(event, widget_data);
+    }
+
+    pub fn get_widget_index(&self, kind: &str) -> usize {
+        *self.widget_map.get(kind).unwrap()
+    }
+
 
 }
 

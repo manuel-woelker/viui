@@ -8,7 +8,7 @@ pub type PropsBox = Box<dyn WidgetProps>;
 
 
 pub struct WidgetData {
-    kind: String,
+    kind_index: usize,
     props_type_id: TypeId,
     state: StateBox,
     props: PropsBox,
@@ -60,9 +60,10 @@ impl UI {
         }
     }
 
-    pub fn add_widget<S: WidgetState, P: WidgetProps>(&mut self, kind: String, state:S, props: P) -> Idx<WidgetData> {
+    pub fn add_widget<S: WidgetState, P: WidgetProps>(&mut self, kind: &str, state:S, props: P) -> Idx<WidgetData> {
+        let kind_index = self.widget_registry.get_widget_index(kind);
         self.state_arena.insert(WidgetData {
-            kind,
+            kind_index,
             props_type_id: TypeId::of::<P>(),
             state: Box::new(state),
             props: Box::new(props),
@@ -81,9 +82,9 @@ impl UI {
                     let widget = &self.state_arena[hovered_widget];
                 }
                 for widget in self.state_arena.entries() {
-                    self.widget_registry.handle_event(&widget.kind.clone(), WidgetEvent::mouse_out(), widget);
+                    self.widget_registry.handle_event(widget.kind_index, WidgetEvent::mouse_out(), widget);
                     if widget.bounds.contains(&position) {
-                        self.widget_registry.handle_event(&widget.kind.clone(), WidgetEvent::mouse_over(), widget);
+                        self.widget_registry.handle_event(widget.kind_index, WidgetEvent::mouse_over(), widget);
 //                        break;
                     }
                 }
