@@ -1,19 +1,25 @@
 use std::any::TypeId;
 use crate::arenal::{Arenal, Idx};
 use crate::render::command::RenderCommand;
-use crate::types::{Point, Rect};
+use crate::types::{Point, Rect, Size};
 use crate::widget_model::{ButtonWidgetProps, Widget, WidgetEventHandler, WidgetProps, WidgetRegistry, WidgetState};
 
 pub type StateBox = Box<dyn WidgetState>;
 pub type PropsBox = Box<dyn WidgetProps>;
 
 
+
+#[derive(Clone, Debug, Default)]
+pub struct LayoutInfo {
+    bounds: Rect,
+}
+
 pub struct WidgetData {
     kind_index: usize,
     props_type_id: TypeId,
+    layout: LayoutInfo,
     state: StateBox,
     props: PropsBox,
-    bounds: Rect,
 }
 
 impl WidgetData {
@@ -43,11 +49,11 @@ impl WidgetData {
     }
 
     pub fn set_bounds(&mut self, bounds: Rect) {
-        self.bounds = bounds;
+        self.layout.bounds = bounds;
     }
 
     pub fn bounds(&self) -> &Rect {
-        &self.bounds
+        &self.layout.bounds
     }
 
     pub fn kind_index(&self) -> usize {
@@ -76,7 +82,7 @@ impl UI {
             props_type_id: TypeId::of::<P>(),
             state: Box::new(state),
             props: Box::new(props),
-            bounds: Rect::default(),
+            layout: LayoutInfo::default(),
         })
     }
 
@@ -92,7 +98,7 @@ impl UI {
                 }
                 for widget in self.state_arena.entries_mut() {
                     self.widget_registry.handle_event(widget.kind_index, WidgetEvent::mouse_out(), widget);
-                    if widget.bounds.contains(position) {
+                    if widget.layout.bounds.contains(position) {
                         self.widget_registry.handle_event(widget.kind_index, WidgetEvent::mouse_over(), widget);
 //                        break;
                     }
@@ -103,6 +109,17 @@ impl UI {
 
     pub fn register_widget<T: Widget>(&mut self) {
         self.widget_registry.register_widget::<T>();
+    }
+
+    pub fn perform_layout(&mut self) {
+        let widget_height = 40.0;
+        let widget_width = 200.0;
+        let mut current_y = 0.0f32;
+        for widget in self.state_arena.entries_mut() {
+            widget.layout.bounds = Rect::new(Point::new(0.0, current_y), Size::new(widget_width, widget_height));
+            current_y += widget_height;
+        }
+
     }
 
     pub fn make_render_commands(&self) -> Vec<RenderCommand> {

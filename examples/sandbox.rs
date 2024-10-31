@@ -190,6 +190,7 @@ fn render<T: Renderer>(
     square_position: PhysicalPosition<f64>,
     counter: i32,
 ) {
+    ui.perform_layout();
     let render_commands = ui.make_render_commands();
 
     let size = window.inner_size();

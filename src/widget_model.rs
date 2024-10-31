@@ -120,7 +120,7 @@ impl Widget for ButtonWidget {
 
     fn render_widget(render_queue: &mut Vec<RenderCommand>, state: &Self::State, props: &Self::Props) {
         if state.is_hovering {
-            render_queue.push(RenderCommand::SetFillColor(Color::new(255, 2, 255, 255)));
+            render_queue.push(RenderCommand::SetFillColor(Color::new(240, 240, 240, 255)));
         } else {
             render_queue.push(RenderCommand::SetFillColor(Color::new(220, 220, 220, 255)));
         }
