@@ -25,7 +25,7 @@ use glutin::{
 use rstar::primitives::Rectangle;
 use xui::geometry::{Point, Rect};
 use xui::observable_state::{ObservableState, TypedPath};
-use xui::ui::{UiEvent, WidgetData, WidgetEvent, WidgetEventHandler, WidgetEventKind, UI};
+use xui::ui::{UiEvent, WidgetData, WidgetEvent, WidgetEventKind, UI};
 use xui::widget_model::{Text, TextPart, WidgetState, WidgetModel, ButtonWidgetProps, WidgetProps, WidgetRegistry, ButtonWidget, ButtonWidgetState};
 
 #[derive(Debug, Reflect)]
@@ -73,30 +73,19 @@ fn main() {
                     TextPart::VariableText("counter".to_string()), ]
     };
     let mut ui = UI::new();
-    let event_handler = |event: WidgetEvent, widget:&mut WidgetData| {
-        let state = widget.cast_state_mut::<ButtonWidgetState>();
-        match event.kind() {
-            WidgetEventKind::MouseOver => {
-                state.is_hovering = true;
-            }
-            WidgetEventKind::MouseOut => {
-                state.is_hovering = false;
-            }
-        }
-
-    };
-    let button_idx = ui.add_widget(ButtonWidgetState::default(), ButtonWidgetProps {
+    let _button_idx = ui.add_widget("button".to_string(), ButtonWidgetState::default(), ButtonWidgetProps {
         label: Text {
             parts: vec![TextPart::FixedText("Increment".to_string())],
         },
-    }, Box::new(event_handler.clone()));
-    ui.add_widget(ButtonWidgetState::default(), ButtonWidgetProps {
+    }, );
+    ui.register_widget::<ButtonWidget>();
+    ui.add_widget("button".to_string(), ButtonWidgetState::default(), ButtonWidgetProps {
         label: Text {
             parts: vec![TextPart::FixedText("We were clicked ".to_string()),
                         TextPart::VariableText("counter".to_string()),
                         TextPart::FixedText(" times.".to_string()),]
         }
-    }, Box::new(event_handler.clone()));
+    });
 /*    let widget_model = WidgetModel {
         widgets: vec![
             first_button,
@@ -214,7 +203,7 @@ fn render<T: Renderer>(
         canvas.stroke_path(&path, &Paint::color(Color::hsl(0.5, 0.5, 0.0)));
 
         let string = text_to_string(&app_state, &props.label.parts);
-        canvas.fill_text(10.0, bounds.height()/2.0, string, &Paint::color(Color::hsl(0.0, 0.0, 0.0)).with_text_baseline(Baseline::Middle).with_font_size(18.0).with_anti_alias(true)).unwrap();
+        canvas.fill_text(10.0, bounds.height()/2.0, string, &Paint::color(Color::hsl(0.0, 0.0, 0.0)).with_text_baseline(Baseline::Middle).with_font_size(20.0).with_anti_alias(true)).unwrap();
     }));
     // Make sure the canvas has the right size:
     let size = window.inner_size();
