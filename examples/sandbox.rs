@@ -23,10 +23,10 @@ use glutin::{
     surface::{SurfaceAttributesBuilder, WindowSurface},
 };
 use rstar::primitives::Rectangle;
-use xui::geometry::{Point, Rect};
-use xui::observable_state::{ObservableState, TypedPath};
-use xui::ui::{UiEvent, WidgetData, WidgetEvent, WidgetEventKind, UI};
-use xui::widget_model::{Text, TextPart, WidgetState, WidgetModel, ButtonWidgetProps, WidgetProps, WidgetRegistry, ButtonWidget, ButtonWidgetState};
+use viui::geometry::{Point, Rect};
+use viui::observable_state::{ObservableState, TypedPath};
+use viui::ui::{UiEvent, WidgetData, WidgetEvent, WidgetEventKind, UI};
+use viui::widget_model::{Text, TextPart, WidgetState, WidgetModel, ButtonWidgetProps, WidgetProps, WidgetRegistry, ButtonWidget, ButtonWidgetState};
 
 #[derive(Debug, Reflect)]
 struct AppState {
@@ -44,7 +44,7 @@ struct UiState {
 }
 
 fn main() {
-    println!("Starting XUI");
+    println!("Starting VIUI");
 //    dbg!(&b);
     let event_loop = EventLoop::new();
     let (context, gl_display, window, surface) = create_window(&event_loop);

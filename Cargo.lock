@@ -1391,6 +1391,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
+name = "viui"
+version = "0.1.0"
+dependencies = [
+ "bevy_reflect",
+ "default-boxed",
+ "femtovg",
+ "glutin",
+ "glutin-winit",
+ "rand",
+ "raw-window-handle",
+ "ron",
+ "rstar",
+ "thunderdome",
+ "winit",
+]
+
+[[package]]
 name = "wasi"
 version = "0.11.0+wasi-snapshot-preview1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1849,23 +1866,6 @@ name = "xml-rs"
 version = "0.8.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af4e2e2f7cba5a093896c1e150fbfe177d1883e7448200efb81d40b9d339ef26"
-
-[[package]]
-name = "xui"
-version = "0.1.0"
-dependencies = [
- "bevy_reflect",
- "default-boxed",
- "femtovg",
- "glutin",
- "glutin-winit",
- "rand",
- "raw-window-handle",
- "ron",
- "rstar",
- "thunderdome",
- "winit",
-]
 
 [[package]]
 name = "zerocopy"
