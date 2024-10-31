@@ -47,7 +47,7 @@ struct UiState {
 
 fn main() {
     println!("Starting VIUI");
-//    dbg!(&b);
+    //    dbg!(&b);
     let event_loop = EventLoop::new();
     let (context, gl_display, window, surface) = create_window(&event_loop);
 
@@ -68,74 +68,84 @@ fn main() {
     let mut ui_state = UiState { rect_list: Vec::new() };
     let mut widget_registry = WidgetRegistry::new();
     widget_registry.register_widget::<ButtonWidget>();
-    let mut first_button =widget_registry.make_widget_props("button");
-/*    let text = first_button.path_mut::<Text>("#0").unwrap();
-    *text = Text {
-        parts: vec![TextPart::FixedText("The Counter: ".to_string()),
-                    TextPart::VariableText("counter".to_string()), ]
-    };*/
-    let mut ui = UI::new();
+    let mut first_button = widget_registry.make_widget_props("button");
+    /*    let text = first_button.path_mut::<Text>("#0").unwrap();
+        *text = Text {
+            parts: vec![TextPart::FixedText("The Counter: ".to_string()),
+                        TextPart::VariableText("counter".to_string()), ]
+        };*/
+    let mut ui = UI::new(app_state, move |app_state| {
+        app_state.apply_change("Increment",  |mutator| {
+            mutator.mutate(&counter_path, |counter| *counter += 1);
+        });
+    });
     ui.register_widget::<ButtonWidget>();
 
     let _button_idx = ui.add_widget("button", ButtonWidgetState::default(), ButtonWidgetProps {
         label: "Increment".to_string(),
     }, );
-    ui.add_widget("button", ButtonWidgetState::default(), ButtonWidgetProps {
+    let label_idx = ui.add_widget("button", ButtonWidgetState::default(), ButtonWidgetProps {
         label: "Counter".to_string(),
     });
-
-
-/*    let _button_idx = ui.add_widget("button", ButtonWidgetState::default(), ButtonWidgetProps {
-        label: Text {
-            parts: vec![TextPart::FixedText("Increment".to_string())],
-        },
-    }, );
-    ui.add_widget("button", ButtonWidgetState::default(), ButtonWidgetProps {
-        label: Text {
-            parts: vec![TextPart::FixedText("We were clicked ".to_string()),
-                        TextPart::VariableText("counter".to_string()),
-                        TextPart::FixedText(" times.".to_string()),]
-        }
+    ui.set_widget_prop(label_idx, "label", Text {
+        parts: vec![TextPart::FixedText("The Counter: ".to_string()),
+                    TextPart::VariableText("counter".to_string()), ]
     });
 
- */
-/*    let widget_model = WidgetModel {
-        widgets: vec![
-            first_button,
-            Box::new(ButtonWidgetProps {
-                label: Text {
-                        parts: vec![TextPart::FixedText("Increment".to_string())],
-                    },
-            }),
-            Box::new(ButtonWidgetProps {
-                label: Text {
-                        parts: vec![TextPart::FixedText("We were clicked ".to_string()),
-                                    TextPart::VariableText("counter".to_string()),
-                                    TextPart::FixedText(" times.".to_string()),]
-                    }
+
+    /*    let _button_idx = ui.add_widget("button", ButtonWidgetState::default(), ButtonWidgetProps {
+            label: Text {
+                parts: vec![TextPart::FixedText("Increment".to_string())],
+            },
+        }, );
+        ui.add_widget("button", ButtonWidgetState::default(), ButtonWidgetProps {
+            label: Text {
+                parts: vec![TextPart::FixedText("We were clicked ".to_string()),
+                            TextPart::VariableText("counter".to_string()),
+                            TextPart::FixedText(" times.".to_string()),]
+            }
+        });
+
+     */
+    /*    let widget_model = WidgetModel {
+            widgets: vec![
+                first_button,
+                Box::new(ButtonWidgetProps {
+                    label: Text {
+                            parts: vec![TextPart::FixedText("Increment".to_string())],
+                        },
                 }),
-        ],
-    };
-*/
+                Box::new(ButtonWidgetProps {
+                    label: Text {
+                            parts: vec![TextPart::FixedText("We were clicked ".to_string()),
+                                        TextPart::VariableText("counter".to_string()),
+                                        TextPart::FixedText(" times.".to_string()),]
+                        }
+                    }),
+            ],
+        };
+    */
+    let mut mouse_position: Point = Point::new(0.0, 0.0);
     event_loop.run(move |event, _target, control_flow| match event {
         Event::WindowEvent { event, .. } => match event {
             WindowEvent::CursorMoved { position, .. } => {
-                mouse_position = position;
-                ui.handle_ui_event(UiEvent::mouse_move(Point::new(mouse_position.x as f32, mouse_position.y as f32)));
+                mouse_position = Point::new(position.x as f32, position.y as f32);
+                ui.handle_ui_event(UiEvent::mouse_move(mouse_position));
                 window.request_redraw();
             }
             WindowEvent::MouseInput { state: ElementState::Pressed, button: MouseButton::Left, .. } => {
                 counter += 1;
-                app_state.apply_change("Increment", |mutator| {
-                    mutator.mutate(&counter_path, |counter| *counter += 1);
-                });
+                /*                app_state.apply_change("Increment", |mutator| {
+                                    mutator.mutate(&counter_path, |counter| *counter += 1);
+                                });*/
+                ui.handle_ui_event(UiEvent::mouse_input(mouse_position));
                 window.request_redraw();
             }
             WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
             _ => {}
         },
         Event::RedrawRequested(_) => {
-            render(&context, &surface, &window, &mut canvas, &mut ui, &app_state, &mut ui_state, mouse_position, counter);
+            render(&context, &surface, &window, &mut canvas, &mut ui);
         }
         _ => {}
     })
@@ -185,11 +195,8 @@ fn render<T: Renderer>(
     window: &Window,
     canvas: &mut Canvas<T>,
     ui: &mut UI,
-    app_state: &ObservableState,
-    ui_state: &mut UiState,
-    square_position: PhysicalPosition<f64>,
-    counter: i32,
 ) {
+    ui.eval_expressions();
     ui.perform_layout();
     let render_commands = ui.make_render_commands();
 

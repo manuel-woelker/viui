@@ -1,5 +1,5 @@
 use std::num::NonZeroU16;
-use std::ops::Index;
+use std::ops::{Index, IndexMut};
 use rand::random;
 use thunderdome::Arena;
 
@@ -74,6 +74,16 @@ impl <T> Index<&Idx<T>> for Arenal<T> {
             panic!("not occupied");
         };
         &value
+    }
+}
+
+impl <T> IndexMut<&Idx<T>> for Arenal<T> {
+    fn index_mut(&mut self, idx: &Idx<T>) -> &mut T {
+        let entry = &mut self.entries[idx.offset as usize];
+        let Entry::Occupied(Occupied { value, generation }) = entry else {
+            panic!("not occupied");
+        };
+        value
     }
 }
 

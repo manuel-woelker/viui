@@ -1,8 +1,11 @@
 use std::any::TypeId;
+use bevy_reflect::{GetPath, Reflect};
+use UiEventKind::MouseMoved;
 use crate::arenal::{Arenal, Idx};
+use crate::observable_state::ObservableState;
 use crate::render::command::RenderCommand;
 use crate::types::{Point, Rect, Size};
-use crate::widget_model::{ButtonWidgetProps, Widget, WidgetEventHandler, WidgetProps, WidgetRegistry, WidgetState};
+use crate::widget_model::{ButtonWidgetProps, Text, TextPart, Widget, WidgetEventHandler, WidgetProps, WidgetRegistry, WidgetState};
 
 pub type StateBox = Box<dyn WidgetState>;
 pub type PropsBox = Box<dyn WidgetProps>;
@@ -20,6 +23,12 @@ pub struct WidgetData {
     layout: LayoutInfo,
     state: StateBox,
     props: PropsBox,
+    prop_expressions: Vec<PropExpression>
+}
+
+pub struct PropExpression {
+    pub field_name: String,
+    pub text: Text,
 }
 
 impl WidgetData {
@@ -64,14 +73,19 @@ impl WidgetData {
 pub struct UI {
     widget_registry: WidgetRegistry,
     state_arena: Arenal<WidgetData>,
-    hovered_widget: Option<Idx<WidgetData>>}
+    hovered_widget: Option<Idx<WidgetData>>,
+    app_state: Box<ObservableState>,
+    event_handler: Box<dyn Fn(&mut ObservableState)>,
+}
 
 impl UI {
-    pub fn new() -> UI {
+    pub fn new(state: ObservableState, event_handler: impl Fn(&mut ObservableState) + 'static) -> UI {
         UI {
             widget_registry: WidgetRegistry::new(),
             state_arena: Arenal::new(),
             hovered_widget: None,
+            app_state: Box::new(state),
+            event_handler: Box::new(event_handler),
         }
     }
 
@@ -83,6 +97,7 @@ impl UI {
             state: Box::new(state),
             props: Box::new(props),
             layout: LayoutInfo::default(),
+            prop_expressions: Vec::new(),
         })
     }
 
@@ -92,10 +107,7 @@ impl UI {
 
     pub fn handle_ui_event(&mut self, event: UiEvent) {
         match event.kind {
-            UiEventKind::MouseMoved(position) => {
-                if let Some(hovered_widget) = &self.hovered_widget {
-                    let widget = &self.state_arena[hovered_widget];
-                }
+            MouseMoved(position) => {
                 for widget in self.state_arena.entries_mut() {
                     self.widget_registry.handle_event(widget.kind_index, WidgetEvent::mouse_out(), widget);
                     if widget.layout.bounds.contains(position) {
@@ -104,12 +116,26 @@ impl UI {
                     }
                 }
             }
+            UiEventKind::MouseInput(position) => {
+                (self.event_handler)(self.app_state.as_mut());
+            }
         }
     }
 
     pub fn register_widget<T: Widget>(&mut self) {
         self.widget_registry.register_widget::<T>();
     }
+
+    pub fn eval_expressions(&mut self) {
+        for widget in self.state_arena.entries_mut() {
+            for expression in &widget.prop_expressions {
+                let string = text_to_string(self.app_state.as_ref(), &expression.text.parts);
+                widget.props.reflect_path_mut(&*expression.field_name).unwrap().apply(&string);
+            }
+        }
+
+    }
+
 
     pub fn perform_layout(&mut self) {
         let widget_height = 40.0;
@@ -133,8 +159,33 @@ impl UI {
         render_commands
     }
 
+    pub fn set_widget_prop(&mut self, widget_index: Idx<WidgetData>, field_name: &str, text: Text) {
+        self.state_arena[&widget_index].prop_expressions.push(PropExpression {
+            field_name: field_name.to_string(),
+            text,
+        });
+    }
+
+    pub fn handle_event(&mut self, event: UiEvent) {}
+
 
 }
+
+fn text_to_string(app_state: &ObservableState, text: &Vec<TextPart>) -> String {
+    let mut string = "".to_string();
+    for part in text {
+        match part {
+            TextPart::FixedText(fixed_string) => {
+                string.push_str(fixed_string);
+            }
+            TextPart::VariableText(path) => {
+                string.push_str(&format!("{:?}", app_state.state().reflect_path(&**path).unwrap()));
+            }
+        }
+    }
+    string
+}
+
 
 #[derive(Debug)]
 pub struct WidgetEvent {
@@ -172,12 +223,18 @@ pub struct UiEvent {
 #[derive(Debug)]
 pub enum UiEventKind {
     MouseMoved(Point),
+    MouseInput(Point),
 }
 
 impl UiEvent {
-    pub fn mouse_move(point: Point) -> Self {
+    pub fn mouse_move(position: Point) -> Self {
         Self {
-            kind: UiEventKind::MouseMoved(point),
+            kind: MouseMoved(position),
+        }
+    }
+    pub fn mouse_input(point: Point) -> Self {
+        Self {
+            kind: UiEventKind::MouseInput(point),
         }
     }
 }

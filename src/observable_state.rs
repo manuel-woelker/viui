@@ -40,6 +40,7 @@ pub struct Mutator<'a> {
     state: &'a mut ObservableState,
 }
 
+#[derive(Debug)]
 pub struct TypedPath<T: Reflect> {
     path: ParsedPath,
     marker: PhantomData<T>,
