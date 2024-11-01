@@ -122,12 +122,20 @@ impl Widget for ButtonWidget {
             WidgetEventKind::MouseOut => {
                 state.is_hovering = false;
             }
+            WidgetEventKind::MousePress => {
+                state.is_pressed = true;
+            }
+            WidgetEventKind::MouseRelease => {
+                state.is_pressed = false;
+            }
         }
     }
 
     fn render_widget(render_queue: &mut Vec<RenderCommand>, state: &Self::State, props: &Self::Props) {
-        if state.is_hovering {
-            render_queue.push(RenderCommand::SetFillColor(Color::new(240, 240, 240, 255)));
+        if state.is_pressed {
+            render_queue.push(RenderCommand::SetFillColor(Color::new(250, 250, 250, 255)));
+        } else if state.is_hovering {
+            render_queue.push(RenderCommand::SetFillColor(Color::new(230, 230, 230, 255)));
         } else {
             render_queue.push(RenderCommand::SetFillColor(Color::new(220, 220, 220, 255)));
         }
@@ -150,6 +158,7 @@ impl WidgetProps for ButtonWidgetProps {}
 #[derive(Reflect, Debug, Default)]
 pub struct ButtonWidgetState {
     pub is_hovering: bool,
+    pub is_pressed: bool,
 }
 
 impl WidgetState for ButtonWidgetState {}

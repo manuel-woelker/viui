@@ -13,7 +13,6 @@ pub type StateBox = Box<dyn WidgetState>;
 pub type PropsBox = Box<dyn WidgetProps>;
 
 
-
 #[derive(Clone, Debug, Default)]
 pub struct LayoutInfo {
     bounds: Rect,
@@ -79,6 +78,7 @@ pub struct UI {
     hovered_widget: Option<Idx<WidgetData>>,
     app_state: Box<ObservableState>,
     event_handler: Box<dyn Fn(&mut ObservableState, &dyn Reflect)>,
+    mouse_position: Point,
 }
 
 impl UI {
@@ -88,14 +88,15 @@ impl UI {
             state_arena: Arenal::new(),
             hovered_widget: None,
             app_state: Box::new(state),
-            event_handler: Box::new(move |state, message | {
+            event_handler: Box::new(move |state, message| {
                 let typed_message = message.downcast_ref::<MESSAGE>().unwrap();
                 event_handler(state, typed_message);
             }),
+            mouse_position: Default::default(),
         }
     }
 
-    pub fn add_widget<S: WidgetState, P: WidgetProps>(&mut self, kind: &str, state:S, props: P) -> Idx<WidgetData> {
+    pub fn add_widget<S: WidgetState, P: WidgetProps>(&mut self, kind: &str, state: S, props: P) -> Idx<WidgetData> {
         let kind_index = self.widget_registry.get_widget_index(kind);
         self.state_arena.insert(WidgetData {
             kind_index,
@@ -108,27 +109,34 @@ impl UI {
         })
     }
 
-    pub fn widgets(&mut self) -> impl Iterator<Item = &mut WidgetData> {
+    pub fn widgets(&mut self) -> impl Iterator<Item=&mut WidgetData> {
         self.state_arena.entries_mut()
     }
 
     pub fn handle_ui_event(&mut self, event: UiEvent) {
         match event.kind {
             MouseMoved(position) => {
+                self.mouse_position = position;
                 for widget in self.state_arena.entries_mut() {
                     self.widget_registry.handle_event(widget.kind_index, WidgetEvent::mouse_out(), widget);
                     if widget.layout.bounds.contains(position) {
                         self.widget_registry.handle_event(widget.kind_index, WidgetEvent::mouse_over(), widget);
-//                        break;
+                        //                        break;
                     }
                 }
             }
-            UiEventKind::MouseInput(position) => {
+            UiEventKind::MouseInput(input) => {
+                let position = self.mouse_position;
                 for widget in self.state_arena.entries_mut() {
                     if widget.layout.bounds.contains(position) {
-                        // Found clicked widget
-                        if let Some(message) = widget.event_mappings.get("click") {
-                            (self.event_handler)(self.app_state.as_mut(), message.as_ref());
+                        if input.mouse_event_kind == MouseEventKind::Pressed {
+                            self.widget_registry.handle_event(widget.kind_index, WidgetEvent::mouse_press(), widget);
+                            // Found clicked widget
+                            if let Some(message) = widget.event_mappings.get("click") {
+                                (self.event_handler)(self.app_state.as_mut(), message.as_ref());
+                            }
+                        } else if input.mouse_event_kind == MouseEventKind::Released {
+                            self.widget_registry.handle_event(widget.kind_index, WidgetEvent::mouse_release(), widget);
                         }
                     }
                 }
@@ -147,7 +155,6 @@ impl UI {
                 widget.props.reflect_path_mut(&*expression.field_name).unwrap().apply(&string);
             }
         }
-
     }
 
 
@@ -159,7 +166,6 @@ impl UI {
             widget.layout.bounds = Rect::new(Point::new(0.0, current_y), Size::new(widget_width, widget_height));
             current_y += widget_height;
         }
-
     }
 
     pub fn make_render_commands(&self) -> Vec<RenderCommand> {
@@ -168,7 +174,7 @@ impl UI {
             render_commands.push(RenderCommand::Save);
             self.widget_registry.render_widget(&mut render_commands, widget);
             render_commands.push(RenderCommand::Restore);
-            render_commands.push(RenderCommand::Translate {x: 0.0, y: 40.0})
+            render_commands.push(RenderCommand::Translate { x: 0.0, y: 40.0 })
         }
         render_commands
     }
@@ -183,8 +189,6 @@ impl UI {
     pub fn set_event_mapping<T: Reflect>(&mut self, widget_index: &Idx<WidgetData>, event: &str, message: T) {
         self.state_arena.index_mut(&widget_index).event_mappings.insert(event.to_string(), Box::new(message));
     }
-
-
 }
 
 fn text_to_string(app_state: &ObservableState, text: &Vec<TextPart>) -> String {
@@ -212,6 +216,8 @@ pub struct WidgetEvent {
 pub enum WidgetEventKind {
     MouseOver,
     MouseOut,
+    MousePress,
+    MouseRelease,
 }
 
 impl WidgetEvent {
@@ -223,6 +229,16 @@ impl WidgetEvent {
     pub fn mouse_out() -> Self {
         Self {
             kind: WidgetEventKind::MouseOut,
+        }
+    }
+    pub fn mouse_press() -> Self {
+        Self {
+            kind: WidgetEventKind::MousePress,
+        }
+    }
+    pub fn mouse_release() -> Self {
+        Self {
+            kind: WidgetEventKind::MouseRelease,
         }
     }
 
@@ -239,8 +255,21 @@ pub struct UiEvent {
 #[derive(Debug)]
 pub enum UiEventKind {
     MouseMoved(Point),
-    MouseInput(Point),
+    MouseInput(MouseInput),
 }
+
+
+#[derive(Debug)]
+pub struct MouseInput {
+    pub mouse_event_kind: MouseEventKind,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum MouseEventKind {
+    Pressed,
+    Released,
+}
+
 
 impl UiEvent {
     pub fn mouse_move(position: Point) -> Self {
@@ -248,9 +277,11 @@ impl UiEvent {
             kind: MouseMoved(position),
         }
     }
-    pub fn mouse_input(point: Point) -> Self {
+    pub fn mouse_input(mouse_event_kind: MouseEventKind) -> Self {
         Self {
-            kind: UiEventKind::MouseInput(point),
+            kind: UiEventKind::MouseInput(MouseInput {
+                mouse_event_kind,
+            }, )
         }
     }
 }

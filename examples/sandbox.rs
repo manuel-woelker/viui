@@ -23,11 +23,12 @@ use glutin::{
     surface::{SurfaceAttributesBuilder, WindowSurface},
 };
 use rstar::primitives::Rectangle;
+use winit::platform::run_return::EventLoopExtRunReturn;
 use viui::observable_state::{ObservableState, TypedPath};
 use viui::render::femtovg_renderer::FemtovgRenderer;
 use viui::render::renderer::CommandRenderer;
 use viui::types::{Point, Rect, Size};
-use viui::ui::{UiEvent, WidgetData, WidgetEvent, WidgetEventKind, UI};
+use viui::ui::{MouseEventKind, UiEvent, WidgetData, WidgetEvent, WidgetEventKind, UI};
 use viui::widget_model::{Text, TextPart, WidgetState, WidgetModel, ButtonWidgetProps, WidgetProps, WidgetRegistry, ButtonWidget, ButtonWidgetState};
 
 #[derive(Debug, Reflect)]
@@ -99,8 +100,9 @@ fn main() {
                 ui.handle_ui_event(UiEvent::mouse_move(mouse_position));
                 window.request_redraw();
             }
-            WindowEvent::MouseInput { state: ElementState::Pressed, button: MouseButton::Left, .. } => {
-                ui.handle_ui_event(UiEvent::mouse_input(mouse_position));
+            WindowEvent::MouseInput { state, button: MouseButton::Left, .. } => {
+                // TODO: remove mouse_position from mouse_input
+                ui.handle_ui_event(UiEvent::mouse_input(if state == ElementState::Pressed { MouseEventKind::Pressed} else { MouseEventKind::Released }));
                 window.request_redraw();
             }
             WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
