@@ -1,17 +1,20 @@
 use std::any::TypeId;
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::mem::take;
 use std::ops::{Index, IndexMut};
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
-use bevy_reflect::{GetPath, Reflect};
+use bevy_reflect::{DynamicEnum, DynamicVariant, FromReflect, GetPath, Reflect};
+use regex::Regex;
 use UiEventKind::MouseMoved;
 use crate::arenal::{Arenal, Idx};
+use crate::model::ComponentNode;
 use crate::observable_state::ObservableState;
 use crate::render::command::RenderCommand;
 use crate::types::{Point, Rect, Size};
-use crate::widget_model::{ButtonWidgetProps, Text, TextPart, Widget, WidgetEventHandler, WidgetProps, WidgetRegistry, WidgetState};
+use crate::widget_model::{ButtonWidgetProps, ButtonWidgetState, Text, TextPart, Widget, WidgetEventHandler, WidgetProps, WidgetRegistry, WidgetState};
 
 pub type StateBox = Box<dyn WidgetState>;
 pub type PropsBox = Box<dyn WidgetProps>;
@@ -24,7 +27,7 @@ pub struct LayoutInfo {
 
 pub struct WidgetData {
     kind_index: usize,
-    props_type_id: TypeId,
+    //props_type_id: TypeId,
     layout: LayoutInfo,
     state: StateBox,
     props: PropsBox,
@@ -38,9 +41,6 @@ pub struct PropExpression {
 }
 
 impl WidgetData {
-    pub fn props_type_id(&self) -> TypeId {
-        self.props_type_id
-    }
     pub fn props(&self) -> &dyn WidgetProps {
         self.props.as_ref()
     }
@@ -82,6 +82,7 @@ pub struct UI {
     hovered_widget: Option<Idx<WidgetData>>,
     app_state: Box<ObservableState>,
     event_handler: Box<dyn Fn(&mut ObservableState, &dyn Reflect) + Send>,
+    message_string_to_enum_converter: Box<dyn Fn(&str) -> Box<dyn Reflect> + Send>,
     mouse_position: Point,
     render_backends: Vec<RenderBackend>,
     event_receiver: Receiver<UiEvent>,
@@ -97,8 +98,14 @@ pub struct RenderBackendMessage {
 }
 
 impl UI {
-    pub fn new<MESSAGE: Reflect>(state: ObservableState, event_handler: impl Fn(&mut ObservableState, &MESSAGE) + Send + 'static) -> UI {
+    pub fn new<MESSAGE: Reflect + FromReflect + Debug + Sized>(state: ObservableState, event_handler: impl Fn(&mut ObservableState, &MESSAGE) + Send + 'static) -> UI {
         let (event_sender, event_receiver) = mpsc::channel::<UiEvent>();
+        let message_string_to_enum_converter = Box::new(|message_string: &str| -> Box<dyn Reflect> {
+            let dynamic_enum = DynamicEnum::new(message_string.to_string(), DynamicVariant::Unit);
+            let message = MESSAGE::from_reflect(&dynamic_enum).unwrap();
+            Box::new(message)
+        });
+
         UI {
             widget_registry: WidgetRegistry::new(),
             state_arena: Arenal::new(),
@@ -112,6 +119,7 @@ impl UI {
             render_backends: Vec::new(),
             event_receiver,
             event_sender,
+            message_string_to_enum_converter,
         }
     }
 
@@ -154,11 +162,25 @@ impl UI {
         message_receiver
     }
 
+
+    pub fn add_widget2(&mut self, kind: &str) -> Idx<WidgetData> {
+        let widget_descriptor = self.widget_registry.get_widget_by_name(kind);
+        self.state_arena.insert(WidgetData {
+            kind_index: widget_descriptor.kind_index,
+//            props_type_id: TypeId::of::<P>(),
+            state: (widget_descriptor.make_state)(),
+            props: (widget_descriptor.make_props)(),
+            layout: LayoutInfo::default(),
+            prop_expressions: Vec::new(),
+            event_mappings: Default::default(),
+        })
+    }
+
     pub fn add_widget<S: WidgetState, P: WidgetProps>(&mut self, kind: &str, state: S, props: P) -> Idx<WidgetData> {
         let kind_index = self.widget_registry.get_widget_index(kind);
         self.state_arena.insert(WidgetData {
             kind_index,
-            props_type_id: TypeId::of::<P>(),
+//            props_type_id: TypeId::of::<P>(),
             state: Box::new(state),
             props: Box::new(props),
             layout: LayoutInfo::default(),
@@ -246,6 +268,52 @@ impl UI {
 
     pub fn set_event_mapping<T: Reflect>(&mut self, widget_index: &Idx<WidgetData>, event: &str, message: T) {
         self.state_arena.index_mut(&widget_index).event_mappings.insert(event.to_string(), Box::new(message));
+    }
+    pub fn set_event_mapping_boxed(&mut self, widget_index: &Idx<WidgetData>, event: &str, message: Box<dyn Reflect>) {
+        self.state_arena.index_mut(&widget_index).event_mappings.insert(event.to_string(), message);
+    }
+
+
+    pub fn set_root_node(&mut self, root: ComponentNode) {
+        for child in root.children {
+            let widget_idx = self.add_widget2(&child.kind);
+            for (prop, expression) in child.props {
+                self.set_widget_prop(&widget_idx, &prop, expression_to_text(&expression));
+            }
+            for (event_name, message_name) in child.events {
+                self.set_event_mapping_boxed(&widget_idx, &event_name, (self.message_string_to_enum_converter)(&message_name));
+            }
+        }
+    }
+
+}
+
+fn expression_to_text(original_expression: &str) -> Text {
+    let mut parts =  vec![];
+    let string_regex = Regex::new(r#"^([^$]*)"#).unwrap();
+    let placeholder_regex = Regex::new(r#"^\$\{([^}]+)}"#).unwrap();
+    let mut matched = true;
+    let mut expression = original_expression;
+    while !expression.is_empty() {
+        // TODO: error handling
+        if !matched {
+            panic!("Failed to parse placeholder expression: '{}' at '{}'", original_expression, expression);
+        }
+        matched = false;
+        if let Some(found) = string_regex.find(expression) {
+            parts.push(TextPart::FixedText(found.as_str().to_string()));
+            expression = &expression[found.end()..];
+            matched = true;
+        }
+        if let Some(found) = placeholder_regex.find(expression) {
+            parts.push(TextPart::VariableText(expression[found.start()+2..found.end()-1].to_string()));
+            expression = &expression[found.end()..];
+            matched = true;
+        }
+
+    }
+    Text {
+        parts,
     }
 }
 

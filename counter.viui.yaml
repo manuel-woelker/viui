@@ -1,0 +1,17 @@
+name: App
+children:
+#  - kind: vstack
+#    children:
+  - kind: button
+    props:
+      label: Counter ${counter}
+  - kind: button
+    props:
+      label: Increment
+    events:
+      click: Increment
+  - kind: button
+    props:
+      label: Decrement
+    events:
+      click: Decrement

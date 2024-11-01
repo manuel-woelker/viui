@@ -34,8 +34,9 @@ pub type WidgetRenderFn = Box<dyn Fn(&mut Vec<RenderCommand>, &WidgetData)+Send>
 pub type EventList = Vec<String>;
 
 pub struct WidgetDescriptor {
-    make_state: Box<dyn Fn() -> Box<dyn WidgetState>+Send>,
-    make_props: Box<dyn Fn() -> Box<dyn WidgetProps>+Send>,
+    pub(crate) kind_index: usize,
+    pub make_state: Box<dyn Fn() -> Box<dyn WidgetState>+Send>,
+    pub make_props: Box<dyn Fn() -> Box<dyn WidgetProps>+Send>,
     event_handler: WidgetEventHandler,
     render_fn: WidgetRenderFn,
     // events this widget may emit
@@ -60,9 +61,9 @@ impl WidgetRegistry {
     }
 
     fn register_internal(&mut self, name: String, make_state: Box<dyn Fn() -> Box<dyn WidgetState>+Send>, make_props: Box<dyn Fn() -> Box<dyn WidgetProps>+Send>, event_handler: WidgetEventHandler, render_fn: WidgetRenderFn,emitted_events: EventList,) {
-        let index = self.widgets.len();
-        self.widgets.push(WidgetDescriptor { event_handler, render_fn, make_state, make_props, emitted_events });
-        self.widget_map.insert(name, index);
+        let kind_index = self.widgets.len();
+        self.widgets.push(WidgetDescriptor { kind_index, event_handler, render_fn, make_state, make_props, emitted_events });
+        self.widget_map.insert(name, kind_index);
     }
 
     pub fn register_widget<T: Widget>(&mut self,emitted_events: EventList) {

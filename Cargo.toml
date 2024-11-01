@@ -17,7 +17,9 @@ thunderdome = "0.6.1"
 rand = "0.8.5"
 rgb = "0.8.50"
 euclid = "0.22.11"
-
+serde = { version = "1.0", features = ["derive"] }
+serde_yml = "0.0.12"
+regex = "1.11.1"
 
 [profile.dev.package."*"]
 # Set the default for dependencies in Development mode.
