@@ -25,6 +25,7 @@ use glutin::{
 use rstar::primitives::Rectangle;
 use winit::platform::run_return::EventLoopExtRunReturn;
 use viui::observable_state::{ObservableState, TypedPath};
+use viui::render::backend_femtovg::FemtovgRenderBackend;
 use viui::render::femtovg_renderer::FemtovgRenderer;
 use viui::render::renderer::CommandRenderer;
 use viui::types::{Point, Rect, Size};
@@ -45,17 +46,6 @@ enum AppMessage {
 
 fn main() {
     println!("Starting VIUI");
-    let event_loop = EventLoop::new();
-    let (context, gl_display, window, surface) = create_window(&event_loop);
-
-    let renderer = unsafe { OpenGl::new_from_function_cstr(|s| gl_display.get_proc_address(s).cast()) }
-        .expect("Cannot create renderer");
-
-    let mut canvas = Canvas::new(renderer).expect("Cannot create canvas");
-    canvas.set_size(1000, 600, window.scale_factor() as f32);
-    File::open("assets/fonts/Roboto-Regular.ttf").unwrap();
-    canvas.add_font("assets/fonts/Roboto-Regular.ttf").unwrap();
-
     let app_state = ObservableState::new(AppState { counter: 19 });
     let counter_path = TypedPath::<i32>::new(ParsedPath::parse("counter").unwrap());
     let mut widget_registry = WidgetRegistry::new();
@@ -83,6 +73,7 @@ fn main() {
         label: "Increment".to_string(),
     }, );
     ui.set_event_mapping(&increment_button, "click", AppMessage::Increment);
+
     let decrement_button = ui.add_widget("button", ButtonWidgetState::default(), ButtonWidgetProps {
         label: "Decrement".to_string(),
     }, );
@@ -92,6 +83,22 @@ fn main() {
         parts: vec![TextPart::FixedText("The Counter: ".to_string()),
                     TextPart::VariableText("counter".to_string()), ]
     });
+
+    let render_backend = FemtovgRenderBackend::new(ui.add_render_backend(), ui.event_sender());
+    ui.start();
+    render_backend.start();
+
+/*    let event_loop = EventLoop::new();
+    let (context, gl_display, window, surface) = create_window(&event_loop);
+
+    let renderer = unsafe { OpenGl::new_from_function_cstr(|s| gl_display.get_proc_address(s).cast()) }
+        .expect("Cannot create renderer");
+
+    let mut canvas = Canvas::new(renderer).expect("Cannot create canvas");
+    canvas.set_size(1000, 600, window.scale_factor() as f32);
+    File::open("assets/fonts/Roboto-Regular.ttf").unwrap();
+    canvas.add_font("assets/fonts/Roboto-Regular.ttf").unwrap();
+
     event_loop.run(move |event, _target, control_flow| {
         *control_flow = ControlFlow::Wait;
         match event {
@@ -112,7 +119,7 @@ fn main() {
             render(&context, &surface, &window, &mut canvas, &mut ui);
         }
         _ => {}
-    }})
+    }})*/
 }
 
 fn create_window(event_loop: &EventLoop<()>) -> (PossiblyCurrentContext, Display, Window, Surface<WindowSurface>) {

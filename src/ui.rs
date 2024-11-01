@@ -1,6 +1,10 @@
 use std::any::TypeId;
 use std::collections::HashMap;
+use std::mem::take;
 use std::ops::{Index, IndexMut};
+use std::sync::mpsc;
+use std::sync::mpsc::{Receiver, Sender};
+use std::thread;
 use bevy_reflect::{GetPath, Reflect};
 use UiEventKind::MouseMoved;
 use crate::arenal::{Arenal, Idx};
@@ -77,12 +81,24 @@ pub struct UI {
     state_arena: Arenal<WidgetData>,
     hovered_widget: Option<Idx<WidgetData>>,
     app_state: Box<ObservableState>,
-    event_handler: Box<dyn Fn(&mut ObservableState, &dyn Reflect)>,
+    event_handler: Box<dyn Fn(&mut ObservableState, &dyn Reflect) + Send>,
     mouse_position: Point,
+    render_backends: Vec<RenderBackend>,
+    event_receiver: Receiver<UiEvent>,
+    event_sender: Sender<UiEvent>,
+}
+
+struct RenderBackend {
+    render_backend_sender: Sender<RenderBackendMessage>,
+}
+
+pub struct RenderBackendMessage {
+    pub(crate) render_commands: Vec<RenderCommand>,
 }
 
 impl UI {
-    pub fn new<MESSAGE: Reflect>(state: ObservableState, event_handler: impl Fn(&mut ObservableState, &MESSAGE) + 'static) -> UI {
+    pub fn new<MESSAGE: Reflect>(state: ObservableState, event_handler: impl Fn(&mut ObservableState, &MESSAGE) + Send + 'static) -> UI {
+        let (event_sender, event_receiver) = mpsc::channel::<UiEvent>();
         UI {
             widget_registry: WidgetRegistry::new(),
             state_arena: Arenal::new(),
@@ -93,7 +109,49 @@ impl UI {
                 event_handler(state, typed_message);
             }),
             mouse_position: Default::default(),
+            render_backends: Vec::new(),
+            event_receiver,
+            event_sender,
         }
+    }
+
+    pub fn start(mut self){
+        thread::Builder::new()
+         .name("VIUI Thread".into()).spawn(move || {
+            loop {
+                let event = self.event_receiver.recv().unwrap();
+                self.handle_ui_event(event);
+                self.redraw();
+            }
+        }).unwrap();
+    }
+
+    pub fn redraw(&mut self){
+        self.eval_expressions();
+        self.perform_layout();
+        let render_backends = take(&mut self.render_backends);
+        for backend in &render_backends {
+            let render_commands = self.make_render_commands();
+            backend.render_backend_sender.send(RenderBackendMessage {
+                render_commands,
+            }).unwrap();
+        }
+        self.render_backends = render_backends;
+    }
+
+
+
+    pub fn event_sender(&self) -> Sender<UiEvent> {
+        self.event_sender.clone()
+    }
+
+    pub fn add_render_backend(&mut self) -> Receiver<RenderBackendMessage> {
+        let (render_backend_sender, message_receiver) = mpsc::channel::<RenderBackendMessage>();
+        self.render_backends.push(RenderBackend {
+            render_backend_sender
+        });
+        self.redraw();
+        message_receiver
     }
 
     pub fn add_widget<S: WidgetState, P: WidgetProps>(&mut self, kind: &str, state: S, props: P) -> Idx<WidgetData> {
