@@ -23,16 +23,23 @@ pub trait WidgetProps: Reflect + 'static {
 
 }
 
+pub trait WidgetEvents: Reflect + 'static {
+
+}
+
 pub type WidgetEventHandler = Box<dyn Fn(WidgetEvent, &mut WidgetData)>;
 pub type WidgetRenderFn = Box<dyn Fn(&mut Vec<RenderCommand>, &WidgetData)>;
 
 
+pub type EventList = Vec<String>;
 
 pub struct WidgetDescriptor {
     make_state: Box<dyn Fn() -> Box<dyn WidgetState>>,
     make_props: Box<dyn Fn() -> Box<dyn WidgetProps>>,
     event_handler: WidgetEventHandler,
     render_fn: WidgetRenderFn,
+    // events this widget may emit
+    emitted_events: EventList,
 }
 
 pub struct WidgetRegistry {
@@ -48,24 +55,24 @@ impl WidgetRegistry {
         }
     }
 
-    pub fn register(&mut self, name: impl Into<String>, make_state: impl Fn() -> Box<dyn WidgetState> + 'static, make_props: impl Fn() -> Box<dyn WidgetProps> + 'static, event_handler: impl Fn(WidgetEvent, &mut WidgetData) + 'static, render_fn: impl Fn(&mut Vec<RenderCommand>, &WidgetData) + 'static) {
-        self.register_internal(name.into(), Box::new(make_state), Box::new(make_props), Box::new(event_handler), Box::new(render_fn));
+    pub fn register(&mut self, name: impl Into<String>, make_state: impl Fn() -> Box<dyn WidgetState> + 'static, make_props: impl Fn() -> Box<dyn WidgetProps> + 'static, event_handler: impl Fn(WidgetEvent, &mut WidgetData) + 'static, render_fn: impl Fn(&mut Vec<RenderCommand>, &WidgetData) + 'static, emitted_events: EventList,) {
+        self.register_internal(name.into(), Box::new(make_state), Box::new(make_props), Box::new(event_handler), Box::new(render_fn), emitted_events);
     }
 
-    fn register_internal(&mut self, name: String, make_state: Box<dyn Fn() -> Box<dyn WidgetState>>, make_props: Box<dyn Fn() -> Box<dyn WidgetProps>>, event_handler: WidgetEventHandler, render_fn: WidgetRenderFn) {
+    fn register_internal(&mut self, name: String, make_state: Box<dyn Fn() -> Box<dyn WidgetState>>, make_props: Box<dyn Fn() -> Box<dyn WidgetProps>>, event_handler: WidgetEventHandler, render_fn: WidgetRenderFn,emitted_events: EventList,) {
         let index = self.widgets.len();
-        self.widgets.push(WidgetDescriptor { event_handler, render_fn, make_state, make_props });
+        self.widgets.push(WidgetDescriptor { event_handler, render_fn, make_state, make_props, emitted_events });
         self.widget_map.insert(name, index);
     }
 
-    pub fn register_widget<T: Widget>(&mut self) {
+    pub fn register_widget<T: Widget>(&mut self,emitted_events: EventList) {
         self.register(T::NAME, || Box::new(T::State::default()), || Box::new(T::Props::default()), Box::new(|event: WidgetEvent, widget_data: &mut WidgetData| {
             let (state, props) = widget_data.cast_state_mut_and_props::<T::State, T::Props>();
             T::handle_event(&event, state, props);
         }), Box::new(|render_queue: &mut Vec<RenderCommand>, widget_data: &WidgetData| {
             let (state, props) = widget_data.cast_state_and_props::<T::State, T::Props>();
             T::render_widget(render_queue, state, props);
-        }));
+        }), emitted_events);
     }
 
     pub fn get_widget_by_name(&self, name: &str) -> &WidgetDescriptor {

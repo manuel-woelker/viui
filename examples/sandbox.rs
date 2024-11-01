@@ -35,6 +35,12 @@ struct AppState {
     counter: i32,
 }
 
+#[derive(Debug, Reflect)]
+enum AppMessage {
+    Increment,
+    Decrement,
+}
+
 
 fn main() {
     println!("Starting VIUI");
@@ -49,28 +55,39 @@ fn main() {
     File::open("assets/fonts/Roboto-Regular.ttf").unwrap();
     canvas.add_font("assets/fonts/Roboto-Regular.ttf").unwrap();
 
-    let mut mouse_position = PhysicalPosition::new(0., 0.);
-    let mut counter = 19;
-
-
-    let app_state = ObservableState::new(AppState { counter });
+    let app_state = ObservableState::new(AppState { counter: 19 });
     let counter_path = TypedPath::<i32>::new(ParsedPath::parse("counter").unwrap());
     let mut widget_registry = WidgetRegistry::new();
-    widget_registry.register_widget::<ButtonWidget>();
-    let mut ui = UI::new(app_state, move |app_state| {
-        app_state.apply_change("Increment",  |mutator| {
-            mutator.mutate(&counter_path, |counter| *counter += 1);
-        });
+    widget_registry.register_widget::<ButtonWidget>(vec!["click".to_string()]);
+    let mut ui = UI::new(app_state, move |app_state, message: &AppMessage| {
+        match message {
+            AppMessage::Increment => {
+                app_state.apply_change("Increment",  |mutator| {
+                    mutator.mutate(&counter_path, |counter| *counter += 1);
+                });
+            }
+            AppMessage::Decrement => {
+                app_state.apply_change("Decrement",  |mutator| {
+                    mutator.mutate(&counter_path, |counter| *counter -= 1);
+                });
+            }
+        }
     });
     ui.register_widget::<ButtonWidget>();
 
-    let _button_idx = ui.add_widget("button", ButtonWidgetState::default(), ButtonWidgetProps {
-        label: "Increment".to_string(),
-    }, );
     let label_idx = ui.add_widget("button", ButtonWidgetState::default(), ButtonWidgetProps {
         label: "Counter".to_string(),
     });
-    ui.set_widget_prop(label_idx, "label", Text {
+    let increment_button = ui.add_widget("button", ButtonWidgetState::default(), ButtonWidgetProps {
+        label: "Increment".to_string(),
+    }, );
+    ui.set_event_mapping(&increment_button, "click", AppMessage::Increment);
+    let decrement_button = ui.add_widget("button", ButtonWidgetState::default(), ButtonWidgetProps {
+        label: "Decrement".to_string(),
+    }, );
+    ui.set_event_mapping(&decrement_button, "click", AppMessage::Decrement);
+
+    ui.set_widget_prop(&label_idx, "label", Text {
         parts: vec![TextPart::FixedText("The Counter: ".to_string()),
                     TextPart::VariableText("counter".to_string()), ]
     });
@@ -156,17 +173,3 @@ fn render<T: Renderer>(
     surface.swap_buffers(context).expect("Could not swap buffers");
 }
 
-fn text_to_string(app_state: &&ObservableState, text: &Vec<TextPart>) -> String {
-    let mut string = "".to_string();
-    for part in text {
-        match part {
-            TextPart::FixedText(fixed_string) => {
-                string.push_str(fixed_string);
-            }
-            TextPart::VariableText(path) => {
-                string.push_str(&format!("{:?}", app_state.state().reflect_path(&**path).unwrap()));
-            }
-        }
-    }
-    string
-}

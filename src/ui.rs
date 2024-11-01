@@ -1,4 +1,6 @@
 use std::any::TypeId;
+use std::collections::HashMap;
+use std::ops::{Index, IndexMut};
 use bevy_reflect::{GetPath, Reflect};
 use UiEventKind::MouseMoved;
 use crate::arenal::{Arenal, Idx};
@@ -23,7 +25,8 @@ pub struct WidgetData {
     layout: LayoutInfo,
     state: StateBox,
     props: PropsBox,
-    prop_expressions: Vec<PropExpression>
+    prop_expressions: Vec<PropExpression>,
+    event_mappings: HashMap<String, Box<dyn Reflect>>,
 }
 
 pub struct PropExpression {
@@ -75,17 +78,20 @@ pub struct UI {
     state_arena: Arenal<WidgetData>,
     hovered_widget: Option<Idx<WidgetData>>,
     app_state: Box<ObservableState>,
-    event_handler: Box<dyn Fn(&mut ObservableState)>,
+    event_handler: Box<dyn Fn(&mut ObservableState, &dyn Reflect)>,
 }
 
 impl UI {
-    pub fn new(state: ObservableState, event_handler: impl Fn(&mut ObservableState) + 'static) -> UI {
+    pub fn new<MESSAGE: Reflect>(state: ObservableState, event_handler: impl Fn(&mut ObservableState, &MESSAGE) + 'static) -> UI {
         UI {
             widget_registry: WidgetRegistry::new(),
             state_arena: Arenal::new(),
             hovered_widget: None,
             app_state: Box::new(state),
-            event_handler: Box::new(event_handler),
+            event_handler: Box::new(move |state, message | {
+                let typed_message = message.downcast_ref::<MESSAGE>().unwrap();
+                event_handler(state, typed_message);
+            }),
         }
     }
 
@@ -98,6 +104,7 @@ impl UI {
             props: Box::new(props),
             layout: LayoutInfo::default(),
             prop_expressions: Vec::new(),
+            event_mappings: Default::default(),
         })
     }
 
@@ -117,13 +124,20 @@ impl UI {
                 }
             }
             UiEventKind::MouseInput(position) => {
-                (self.event_handler)(self.app_state.as_mut());
+                for widget in self.state_arena.entries_mut() {
+                    if widget.layout.bounds.contains(position) {
+                        // Found clicked widget
+                        if let Some(message) = widget.event_mappings.get("click") {
+                            (self.event_handler)(self.app_state.as_mut(), message.as_ref());
+                        }
+                    }
+                }
             }
         }
     }
 
     pub fn register_widget<T: Widget>(&mut self) {
-        self.widget_registry.register_widget::<T>();
+        self.widget_registry.register_widget::<T>(vec!["click".to_string()]);
     }
 
     pub fn eval_expressions(&mut self) {
@@ -159,14 +173,16 @@ impl UI {
         render_commands
     }
 
-    pub fn set_widget_prop(&mut self, widget_index: Idx<WidgetData>, field_name: &str, text: Text) {
+    pub fn set_widget_prop(&mut self, widget_index: &Idx<WidgetData>, field_name: &str, text: Text) {
         self.state_arena[&widget_index].prop_expressions.push(PropExpression {
             field_name: field_name.to_string(),
             text,
         });
     }
 
-    pub fn handle_event(&mut self, event: UiEvent) {}
+    pub fn set_event_mapping<T: Reflect>(&mut self, widget_index: &Idx<WidgetData>, event: &str, message: T) {
+        self.state_arena.index_mut(&widget_index).event_mappings.insert(event.to_string(), Box::new(message));
+    }
 
 
 }
