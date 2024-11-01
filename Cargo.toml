@@ -17,3 +17,12 @@ thunderdome = "0.6.1"
 rand = "0.8.5"
 rgb = "0.8.50"
 euclid = "0.22.11"
+
+
+[profile.dev.package."*"]
+# Set the default for dependencies in Development mode.
+opt-level = 3
+
+[profile.dev]
+# Turn on a small amount of optimisation in Development mode.
+opt-level = 1

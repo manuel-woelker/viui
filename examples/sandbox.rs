@@ -92,16 +92,16 @@ fn main() {
         parts: vec![TextPart::FixedText("The Counter: ".to_string()),
                     TextPart::VariableText("counter".to_string()), ]
     });
-    let mut mouse_position: Point = Point::new(0.0, 0.0);
-    event_loop.run(move |event, _target, control_flow| match event {
+    event_loop.run(move |event, _target, control_flow| {
+        *control_flow = ControlFlow::Wait;
+        match event {
         Event::WindowEvent { event, .. } => match event {
             WindowEvent::CursorMoved { position, .. } => {
-                mouse_position = Point::new(position.x as f32, position.y as f32);
+                let mouse_position = Point::new(position.x as f32, position.y as f32);
                 ui.handle_ui_event(UiEvent::mouse_move(mouse_position));
                 window.request_redraw();
             }
             WindowEvent::MouseInput { state, button: MouseButton::Left, .. } => {
-                // TODO: remove mouse_position from mouse_input
                 ui.handle_ui_event(UiEvent::mouse_input(if state == ElementState::Pressed { MouseEventKind::Pressed} else { MouseEventKind::Released }));
                 window.request_redraw();
             }
@@ -112,7 +112,7 @@ fn main() {
             render(&context, &surface, &window, &mut canvas, &mut ui);
         }
         _ => {}
-    })
+    }})
 }
 
 fn create_window(event_loop: &EventLoop<()>) -> (PossiblyCurrentContext, Display, Window, Surface<WindowSurface>) {
