@@ -1,12 +1,9 @@
-use std::any::Any;
-use std::collections::HashMap;
-use bevy_reflect::{Reflect, Typed};
-use default_boxed::DefaultBoxed;
-use femtovg::Canvas;
 use crate::render::command::RenderCommand;
 use crate::result::ViuiResult;
 use crate::types::{Color, Point, Rect, Size};
 use crate::ui::{WidgetData, WidgetEvent, WidgetEventKind};
+use bevy_reflect::{Reflect};
+use std::collections::HashMap;
 
 pub struct WidgetModel {
     pub widgets: Vec<Box<dyn WidgetProps>>,
@@ -41,6 +38,7 @@ pub struct WidgetDescriptor {
     event_handler: WidgetEventHandler,
     render_fn: WidgetRenderFn,
     // events this widget may emit
+    #[allow(dead_code)]
     emitted_events: EventList,
 }
 
@@ -118,7 +116,7 @@ impl Widget for ButtonWidget {
     type State = ButtonWidgetState;
     type Props = ButtonWidgetProps;
 
-    fn handle_event(event: &WidgetEvent, state: &mut Self::State, props: &Self::Props) {
+    fn handle_event(event: &WidgetEvent, state: &mut Self::State, _props: &Self::Props) {
         match event.kind() {
             WidgetEventKind::MouseOver => {
                 state.is_hovering = true;
@@ -144,7 +142,7 @@ impl Widget for ButtonWidget {
             render_queue.push(RenderCommand::SetFillColor(Color::new(220, 220, 220, 255)));
         }
         render_queue.push(RenderCommand::FillRoundRect {
-            rect: Rect::new(Point::new(0.0,0.0), Size::new(100.0, 40.0)),
+            rect: Rect::new(Point::new(0.0,0.0), Size::new(200.0, 40.0)),
             radius: 5.0,
         });
         render_queue.push(RenderCommand::Translate {x: 10.0, y: 20.0});

@@ -68,9 +68,11 @@ impl <'a> Mutator<'a> {
 
 #[derive(Debug)]
 pub struct Change {
+    #[allow(dead_code)]
     label: String,
     path: String,
     old_value: Box<dyn Reflect>,
+    #[allow(dead_code)]
     new_value: Box<dyn Reflect>,
 }
 

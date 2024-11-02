@@ -1,36 +1,10 @@
-use std::any::{Any, TypeId};
-use std::collections::HashMap;
-use std::fs::File;
-use std::num::NonZeroU32;
-use bevy_reflect::{GetPath, ParsedPath, Reflect};
-use femtovg::renderer::OpenGl;
-use femtovg::{Baseline, Canvas, Color, FillRule, Paint, Path, Renderer};
-use glutin::surface::Surface;
-use glutin::{context::PossiblyCurrentContext, display::Display};
-use glutin_winit::DisplayBuilder;
-use raw_window_handle::HasRawWindowHandle;
-use winit::dpi::PhysicalPosition;
-use winit::event::{ElementState, Event, MouseButton, WindowEvent};
-use winit::event_loop::{ControlFlow, EventLoop};
-use winit::window::WindowBuilder;
-use winit::{dpi::PhysicalSize, window::Window};
+use bevy_reflect::{ParsedPath, Reflect};
 
-use glutin::{
-    config::ConfigTemplateBuilder,
-    context::ContextAttributesBuilder,
-    display::GetGlDisplay,
-    prelude::*,
-    surface::{SurfaceAttributesBuilder, WindowSurface},
-};
-use rstar::primitives::Rectangle;
-use winit::platform::run_return::EventLoopExtRunReturn;
-use viui::model::ComponentNode;
 use viui::observable_state::{ObservableState, TypedPath};
 use viui::render::backend_femtovg::FemtovgRenderBackend;
 use viui::result::ViuiResult;
-use viui::types::{Point, Rect, Size};
-use viui::ui::{MouseEventKind, UiEvent, WidgetData, WidgetEvent, WidgetEventKind, UI};
-use viui::widget_model::{Text, TextPart, WidgetState, WidgetModel, ButtonWidgetProps, WidgetProps, WidgetRegistry, ButtonWidget, ButtonWidgetState};
+use viui::ui::UI;
+use viui::widget_model::{ButtonWidget, WidgetRegistry};
 
 #[derive(Debug, Reflect)]
 struct AppState {

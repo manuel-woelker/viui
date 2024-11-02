@@ -15,10 +15,9 @@ use winit::dpi::PhysicalSize;
 use winit::event::{ElementState, Event, MouseButton, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop, EventLoopBuilder};
 use winit::window::{Window, WindowBuilder};
-use crate::render::backend::RenderBackend;
 use crate::render::command::RenderCommand;
 use crate::types::Point;
-use crate::ui::{MouseEventKind, RenderBackendMessage, UiEvent, UI};
+use crate::ui::{MouseEventKind, RenderBackendMessage, UiEvent};
 
 pub struct FemtovgRenderBackend {
     message_receiver: Receiver<RenderBackendMessage>,
@@ -40,7 +39,7 @@ impl FemtovgRenderBackend {
             loop {
                 if let Ok(message) = self.message_receiver.recv() {
                     if let Err(err) = event_loop_proxy.send_event(message) {
-                        dbg!("Event loop closed");
+                        println!("Event loop closed: {}", err);
                     }
                 } else {
                     println!("Could not receive message");
@@ -156,10 +155,10 @@ fn render<T: Renderer>(
             RenderCommand::FillRoundRect { rect, radius } => {
                 let mut path = Path::new();
                 path.rounded_rect(
-                    0.0,
-                    0.0,
-                    200.0,
-                    40.0,
+                    rect.min_x(),
+                    rect.min_y(),
+                    rect.width(),
+                    rect.height(),
                     *radius,
                 );
 
@@ -195,10 +194,4 @@ fn render<T: Renderer>(
     canvas.flush();
     // Display what we've just rendered
     surface.swap_buffers(context).expect("Could not swap buffers");
-}
-
-impl RenderBackend for FemtovgRenderBackend {
-    fn handle_message(&mut self, message: RenderBackendMessage) {
-        todo!()
-    }
 }

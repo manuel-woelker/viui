@@ -1,7 +1,6 @@
+use rand::random;
 use std::num::NonZeroU16;
 use std::ops::{Index, IndexMut};
-use rand::random;
-use thunderdome::Arena;
 
 pub struct Arenal<T> {
     arenal_id: ArenalId,
@@ -12,8 +11,9 @@ type OffsetType = u32;
 type ArenalId = u16;
 type Generation = NonZeroU16;
 
-pub enum Entry<T> {
+enum Entry<T> {
     Occupied(Occupied<T>),
+    #[allow(unused)]
     Empty(Empty),
 }
 
@@ -75,20 +75,32 @@ impl <T> Arenal<T> {
 impl <T> Index<&Idx<T>> for Arenal<T> {
     type Output = T;
     fn index(&self, idx: &Idx<T>) -> &T {
+        if idx.arenal_id != self.arenal_id {
+            panic!("wrong arenal_id in index: {} != {}", idx.arenal_id, self.arenal_id);
+        }
         let entry = &self.entries[idx.offset as usize];
         let Entry::Occupied(Occupied { value, generation }) = entry else {
             panic!("not occupied");
         };
+        if idx.generation != *generation {
+            panic!("wrong generation in index: {} != {}", idx.generation, generation);
+        }
         &value
     }
 }
 
 impl <T> IndexMut<&Idx<T>> for Arenal<T> {
     fn index_mut(&mut self, idx: &Idx<T>) -> &mut T {
+        if idx.arenal_id != self.arenal_id {
+            panic!("wrong arenal_id in index: {} != {}", idx.arenal_id, self.arenal_id);
+        }
         let entry = &mut self.entries[idx.offset as usize];
         let Entry::Occupied(Occupied { value, generation }) = entry else {
             panic!("not occupied");
         };
+        if idx.generation != *generation {
+            panic!("wrong generation in index: {} != {}", idx.generation, generation);
+        }
         value
     }
 }
@@ -97,9 +109,7 @@ impl <T> IndexMut<&Idx<T>> for Arenal<T> {
 
 #[cfg(test)]
 mod tests {
-    use bevy_reflect::{ParsedPath, Reflect};
     use crate::arenal::{Arenal, Entry, Idx};
-    use crate::observable_state::{ObservableState, TypedPath};
 
     #[test]
     fn test_size() {
