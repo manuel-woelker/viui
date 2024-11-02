@@ -69,6 +69,7 @@ impl WidgetData {
     pub fn kind_index(&self) -> usize {
         self.kind_index
     }
+
 }
 
 pub type ApplicationEventHandler = Box<dyn Fn(&mut ObservableState, &dyn Reflect) + Send>;
