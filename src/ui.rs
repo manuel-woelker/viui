@@ -1,8 +1,10 @@
 use std::any::TypeId;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::fs::File;
 use std::mem::take;
 use std::ops::{Index, IndexMut};
+use std::path::Path;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
@@ -273,6 +275,12 @@ impl UI {
         self.state_arena.index_mut(&widget_index).event_mappings.insert(event.to_string(), message);
     }
 
+
+    pub fn set_root_node_file<P: AsRef<Path>>(&mut self, root_path: P) {
+        let model: ComponentNode = serde_yml::from_reader(File::open(&root_path).unwrap()).unwrap();
+        self.set_root_node(model);
+
+    }
 
     pub fn set_root_node(&mut self, root: ComponentNode) {
         for child in root.children {

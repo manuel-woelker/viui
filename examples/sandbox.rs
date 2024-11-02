@@ -46,7 +46,6 @@ enum AppMessage {
 fn main() {
     println!("Starting VIUI");
 
-    let model: ComponentNode = serde_yml::from_reader(File::open("counter.viui.yaml").unwrap()).unwrap();
     let app_state = ObservableState::new(AppState { counter: 19 });
     let counter_path = TypedPath::<i32>::new(ParsedPath::parse("counter").unwrap());
     let mut widget_registry = WidgetRegistry::new();
@@ -66,7 +65,7 @@ fn main() {
         }
     });
     ui.register_widget::<ButtonWidget>();
-    ui.set_root_node(model);
+    ui.set_root_node_file("counter.viui.yaml");
     /*
 
     let label_idx = ui.add_widget("button", ButtonWidgetState::default(), ButtonWidgetProps {
