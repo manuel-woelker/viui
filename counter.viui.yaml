@@ -4,14 +4,14 @@ children:
 #    children:
   - kind: button
     props:
-      label: Counter ${counter}
+      label: "Counter: ${counter}"
   - kind: button
     props:
-      label: Increment
+      label: "+1"
     events:
       click: Increment
   - kind: button
     props:
-      label: Decrement
+      label: "-1"
     events:
       click: Decrement

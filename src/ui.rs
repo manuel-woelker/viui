@@ -1,14 +1,15 @@
-use std::any::TypeId;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fs::File;
 use std::mem::take;
 use std::ops::{Index, IndexMut};
-use std::path::Path;
-use std::sync::mpsc;
-use std::sync::mpsc::{Receiver, Sender};
+use std::path::{Path, PathBuf};
 use std::thread;
+use std::time::Duration;
 use bevy_reflect::{DynamicEnum, DynamicVariant, FromReflect, GetPath, Reflect};
+use crossbeam_channel::{select, Receiver, Sender};
+use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
+use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
 use regex::Regex;
 use UiEventKind::MouseMoved;
 use crate::arenal::{Arenal, Idx};
@@ -87,8 +88,12 @@ pub struct UI {
     message_string_to_enum_converter: Box<dyn Fn(&str) -> Box<dyn Reflect> + Send>,
     mouse_position: Point,
     render_backends: Vec<RenderBackend>,
-    event_receiver: Receiver<UiEvent>,
-    event_sender: Sender<UiEvent>,
+    ui_event_receiver: Receiver<UiEvent>,
+    ui_event_sender: Sender<UiEvent>,
+    file_change_receiver: Receiver<()>,
+    file_watcher: Debouncer<RecommendedWatcher>,
+    root_node_file: PathBuf,
+
 }
 
 struct RenderBackend {
@@ -101,12 +106,24 @@ pub struct RenderBackendMessage {
 
 impl UI {
     pub fn new<MESSAGE: Reflect + FromReflect + Debug + Sized>(state: ObservableState, event_handler: impl Fn(&mut ObservableState, &MESSAGE) + Send + 'static) -> UI {
-        let (event_sender, event_receiver) = mpsc::channel::<UiEvent>();
+        let (event_sender, event_receiver) = crossbeam_channel::bounded::<UiEvent>(4);
+        let (file_change_sender, file_change_receiver) = crossbeam_channel::bounded::<()>(4);
         let message_string_to_enum_converter = Box::new(|message_string: &str| -> Box<dyn Reflect> {
             let dynamic_enum = DynamicEnum::new(message_string.to_string(), DynamicVariant::Unit);
             let message = MESSAGE::from_reflect(&dynamic_enum).unwrap();
             Box::new(message)
         });
+        let mut file_watcher = new_debouncer(Duration::from_millis(10), move |res: DebounceEventResult| {
+            match res {
+                Ok(_events) => {
+                    file_change_sender.send(()).unwrap();
+                },
+                Err(e) => println!("Error {:?}",e),
+            }
+        }).unwrap();
+
+        // Add a path to be watched. All files and directories at that path and
+        // below will be monitored for changes.
 
         UI {
             widget_registry: WidgetRegistry::new(),
@@ -119,19 +136,30 @@ impl UI {
             }),
             mouse_position: Default::default(),
             render_backends: Vec::new(),
-            event_receiver,
-            event_sender,
+            ui_event_receiver: event_receiver,
+            ui_event_sender: event_sender,
             message_string_to_enum_converter,
+            file_change_receiver,
+            file_watcher,
+            root_node_file: Default::default(),
         }
     }
 
     pub fn start(mut self){
         thread::Builder::new()
          .name("VIUI Thread".into()).spawn(move || {
+            println!("Running main loop");
             loop {
-                let event = self.event_receiver.recv().unwrap();
-                self.handle_ui_event(event);
-                self.redraw();
+                select! {
+                    recv(self.file_change_receiver) -> _event => {
+                        self.load_root_node_file();
+                        self.redraw();
+                    }
+                    recv(self.ui_event_receiver) -> event => {
+                        self.handle_ui_event(event.unwrap());
+                        self.redraw();
+                    }
+                }
             }
         }).unwrap();
     }
@@ -152,11 +180,11 @@ impl UI {
 
 
     pub fn event_sender(&self) -> Sender<UiEvent> {
-        self.event_sender.clone()
+        self.ui_event_sender.clone()
     }
 
     pub fn add_render_backend(&mut self) -> Receiver<RenderBackendMessage> {
-        let (render_backend_sender, message_receiver) = mpsc::channel::<RenderBackendMessage>();
+        let (render_backend_sender, message_receiver) = crossbeam_channel::bounded::<RenderBackendMessage>(4);
         self.render_backends.push(RenderBackend {
             render_backend_sender
         });
@@ -169,7 +197,6 @@ impl UI {
         let widget_descriptor = self.widget_registry.get_widget_by_name(kind);
         self.state_arena.insert(WidgetData {
             kind_index: widget_descriptor.kind_index,
-//            props_type_id: TypeId::of::<P>(),
             state: (widget_descriptor.make_state)(),
             props: (widget_descriptor.make_props)(),
             layout: LayoutInfo::default(),
@@ -182,7 +209,6 @@ impl UI {
         let kind_index = self.widget_registry.get_widget_index(kind);
         self.state_arena.insert(WidgetData {
             kind_index,
-//            props_type_id: TypeId::of::<P>(),
             state: Box::new(state),
             props: Box::new(props),
             layout: LayoutInfo::default(),
@@ -277,12 +303,21 @@ impl UI {
 
 
     pub fn set_root_node_file<P: AsRef<Path>>(&mut self, root_path: P) {
-        let model: ComponentNode = serde_yml::from_reader(File::open(&root_path).unwrap()).unwrap();
-        self.set_root_node(model);
+        self.root_node_file = root_path.as_ref().to_path_buf();
+        self.load_root_node_file();
 
+        // Add a path to be watched. All files and directories at that path and
+        // below will be monitored for changes.
+        self.file_watcher.watcher().watch(&self.root_node_file, RecursiveMode::Recursive).unwrap();
+    }
+
+    fn load_root_node_file(&mut self) {
+        let model: ComponentNode = serde_yml::from_reader(File::open(&self.root_node_file).unwrap()).unwrap();
+        self.set_root_node(model);
     }
 
     pub fn set_root_node(&mut self, root: ComponentNode) {
+        self.state_arena.clear();
         for child in root.children {
             let widget_idx = self.add_widget2(&child.kind);
             for (prop, expression) in child.props {

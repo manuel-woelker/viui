@@ -41,6 +41,12 @@ impl <T> Arenal<T> {
         }
     }
 
+    pub fn clear(&mut self) {
+        self.entries.clear();
+        self.arenal_id = random();
+    }
+
+
     pub fn insert(&mut self, value: T) -> Idx<T> {
         let generation: Generation = Generation::new(1).unwrap();
         let index = Idx {

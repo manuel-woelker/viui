@@ -20,6 +20,9 @@ euclid = "0.22.11"
 serde = { version = "1.0", features = ["derive"] }
 serde_yml = "0.0.12"
 regex = "1.11.1"
+notify = { version = "7.0.0" , features = ["crossbeam-channel"]}
+notify-debouncer-mini = { version = "0.5.0", features = ["crossbeam-channel"]}
+crossbeam-channel = "0.5"
 
 [profile.dev.package."*"]
 # Set the default for dependencies in Development mode.

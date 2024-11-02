@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::num::NonZeroU32;
-use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
+use crossbeam_channel::{Receiver, Sender};
 use femtovg::{Baseline, Canvas, Color, Paint, Path, Renderer};
 use femtovg::renderer::OpenGl;
 use glutin::config::ConfigTemplateBuilder;
