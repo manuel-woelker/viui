@@ -1,3 +1,17 @@
+use std::any::type_name;
+use crate::arenal::{Arenal, Idx};
+use crate::{bail, err};
+use crate::model::ComponentNode;
+use crate::observable_state::ObservableState;
+use crate::render::command::RenderCommand;
+use crate::result::{context, ViuiError, ViuiErrorKind, ViuiResult};
+use crate::types::{Point, Rect, Size};
+use crate::widget_model::{Text, TextPart, Widget, WidgetProps, WidgetRegistry, WidgetState};
+use bevy_reflect::{DynamicEnum, DynamicVariant, FromReflect, GetPath, Reflect, TypeInfo};
+use crossbeam_channel::{select, Receiver, Sender};
+use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
+use regex::Regex;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fs::File;
@@ -6,20 +20,7 @@ use std::ops::{Index, IndexMut};
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
-use bevy_reflect::{DynamicEnum, DynamicVariant, FromReflect, GetPath, Reflect};
-use crossbeam_channel::{select, Receiver, Sender};
-use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
-use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
-use regex::Regex;
 use UiEventKind::MouseMoved;
-use crate::arenal::{Arenal, Idx};
-use crate::bail;
-use crate::model::ComponentNode;
-use crate::observable_state::ObservableState;
-use crate::render::command::RenderCommand;
-use crate::result::{context, ViuiError, ViuiErrorKind, ViuiResult};
-use crate::types::{Point, Rect, Size};
-use crate::widget_model::{ButtonWidgetProps, ButtonWidgetState, Text, TextPart, Widget, WidgetEventHandler, WidgetProps, WidgetRegistry, WidgetState};
 
 pub type StateBox = Box<dyn WidgetState>;
 pub type PropsBox = Box<dyn WidgetProps>;
@@ -32,7 +33,6 @@ pub struct LayoutInfo {
 
 pub struct WidgetData {
     kind_index: usize,
-    //props_type_id: TypeId,
     layout: LayoutInfo,
     state: StateBox,
     props: PropsBox,
@@ -46,26 +46,16 @@ pub struct PropExpression {
 }
 
 impl WidgetData {
-    pub fn props(&self) -> &dyn WidgetProps {
-        self.props.as_ref()
+    pub fn cast_state_mut_and_props<S: 'static, P: 'static>(&mut self) -> ViuiResult<(&mut S, &P)> {
+        let state = self.state.as_any_mut().downcast_mut::<S>().ok_or_else(|| err!("Could not cast state to actual type {}", type_name::<S>()))?;
+        let props = self.props.as_any().downcast_ref::<P>().ok_or_else(|| err!("Could not cast props to actual type {}", type_name::<P>()))?;
+        Ok((state, props))
     }
 
-    pub fn cast_props<T: 'static>(&self) -> &T {
-        self.props.as_any().downcast_ref::<T>().unwrap()
-    }
-    pub fn cast_state<T: 'static>(&self) -> &T {
-        self.state.as_any().downcast_ref::<T>().unwrap()
-    }
-    pub fn cast_state_mut<T: 'static>(&mut self) -> &mut T {
-        self.state.as_any_mut().downcast_mut::<T>().unwrap()
-    }
-
-    pub fn cast_state_mut_and_props<S: 'static, P: 'static>(&mut self) -> (&mut S, &P) {
-        (self.state.as_any_mut().downcast_mut::<S>().unwrap(), self.props.as_any().downcast_ref::<P>().unwrap())
-    }
-
-    pub fn cast_state_and_props<S: 'static, P: 'static>(&self) -> (&S, &P) {
-        (self.state.as_any().downcast_ref::<S>().unwrap(), self.props.as_any().downcast_ref::<P>().unwrap())
+    pub fn cast_state_and_props<S: 'static, P: 'static>(&self) -> ViuiResult<(&S, &P)> {
+        let state = self.state.as_any().downcast_ref::<S>().ok_or_else(|| err!("Could not cast state to actual type {}", type_name::<S>()))?;
+        let props = self.props.as_any().downcast_ref::<P>().ok_or_else(|| err!("Could not cast props to actual type {}", type_name::<P>()))?;
+        Ok((state, props))
     }
 
     pub fn set_bounds(&mut self, bounds: Rect) {
@@ -204,16 +194,16 @@ impl UI {
     }
 
 
-    pub fn add_widget2(&mut self, kind: &str) -> Idx<WidgetData> {
+    pub fn add_widget2(&mut self, kind: &str) -> ViuiResult<Idx<WidgetData>> {
         let widget_descriptor = self.widget_registry.get_widget_by_name(kind);
-        self.state_arena.insert(WidgetData {
+        Ok(self.state_arena.insert(WidgetData {
             kind_index: widget_descriptor.kind_index,
-            state: (widget_descriptor.make_state)(),
-            props: (widget_descriptor.make_props)(),
+            state: (widget_descriptor.make_state)()?,
+            props: (widget_descriptor.make_props)()?,
             layout: LayoutInfo::default(),
             prop_expressions: Vec::new(),
             event_mappings: Default::default(),
-        })
+        }))
     }
 
     pub fn add_widget<S: WidgetState, P: WidgetProps>(&mut self, kind: &str, state: S, props: P) -> Idx<WidgetData> {
@@ -337,7 +327,7 @@ impl UI {
     pub fn set_root_node(&mut self, root: ComponentNode) -> ViuiResult<()> {
         self.state_arena.clear();
         for child in root.children {
-            let widget_idx = self.add_widget2(&child.kind);
+            let widget_idx = self.add_widget2(&child.kind)?;
             for (prop, expression) in child.props {
                 self.set_widget_prop(&widget_idx, &prop, expression_to_text(&expression)?);
             }

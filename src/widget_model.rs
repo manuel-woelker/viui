@@ -4,6 +4,7 @@ use bevy_reflect::{Reflect, Typed};
 use default_boxed::DefaultBoxed;
 use femtovg::Canvas;
 use crate::render::command::RenderCommand;
+use crate::result::ViuiResult;
 use crate::types::{Color, Point, Rect, Size};
 use crate::ui::{WidgetData, WidgetEvent, WidgetEventKind};
 
@@ -27,16 +28,16 @@ pub trait WidgetEvents: Reflect + 'static {
 
 }
 
-pub type WidgetEventHandler = Box<dyn Fn(WidgetEvent, &mut WidgetData)+Send>;
-pub type WidgetRenderFn = Box<dyn Fn(&mut Vec<RenderCommand>, &WidgetData)+Send>;
+pub type WidgetEventHandler = Box<dyn Fn(WidgetEvent, &mut WidgetData) -> ViuiResult<()> +Send>;
+pub type WidgetRenderFn = Box<dyn Fn(&mut Vec<RenderCommand>, &WidgetData) -> ViuiResult<()> +Send>;
 
 
 pub type EventList = Vec<String>;
 
 pub struct WidgetDescriptor {
     pub(crate) kind_index: usize,
-    pub make_state: Box<dyn Fn() -> Box<dyn WidgetState>+Send>,
-    pub make_props: Box<dyn Fn() -> Box<dyn WidgetProps>+Send>,
+    pub make_state: Box<dyn Fn() -> ViuiResult<Box<dyn WidgetState>>+Send>,
+    pub make_props: Box<dyn Fn() -> ViuiResult<Box<dyn WidgetProps>>+Send>,
     event_handler: WidgetEventHandler,
     render_fn: WidgetRenderFn,
     // events this widget may emit
@@ -56,23 +57,25 @@ impl WidgetRegistry {
         }
     }
 
-    pub fn register(&mut self, name: impl Into<String>, make_state: impl Fn() -> Box<dyn WidgetState> +Send+ 'static, make_props: impl Fn() -> Box<dyn WidgetProps> +Send+ 'static, event_handler: impl Fn(WidgetEvent, &mut WidgetData)+Send + 'static, render_fn: impl Fn(&mut Vec<RenderCommand>, &WidgetData) +Send+ 'static, emitted_events: EventList,) {
+    pub fn register(&mut self, name: impl Into<String>, make_state: impl Fn() -> ViuiResult<Box<dyn WidgetState>> +Send+ 'static, make_props: impl Fn() -> ViuiResult<Box<dyn WidgetProps>> +Send+ 'static, event_handler: impl Fn(WidgetEvent, &mut WidgetData) -> ViuiResult<()> +Send + 'static, render_fn: impl Fn(&mut Vec<RenderCommand>, &WidgetData) -> ViuiResult<()>+Send+ 'static, emitted_events: EventList,) {
         self.register_internal(name.into(), Box::new(make_state), Box::new(make_props), Box::new(event_handler), Box::new(render_fn), emitted_events);
     }
 
-    fn register_internal(&mut self, name: String, make_state: Box<dyn Fn() -> Box<dyn WidgetState>+Send>, make_props: Box<dyn Fn() -> Box<dyn WidgetProps>+Send>, event_handler: WidgetEventHandler, render_fn: WidgetRenderFn,emitted_events: EventList,) {
+    fn register_internal(&mut self, name: String, make_state: Box<dyn Fn() -> ViuiResult<Box<dyn WidgetState>>+Send>, make_props: Box<dyn Fn() -> ViuiResult<Box<dyn WidgetProps>>+Send>, event_handler: WidgetEventHandler, render_fn: WidgetRenderFn,emitted_events: EventList,) {
         let kind_index = self.widgets.len();
         self.widgets.push(WidgetDescriptor { kind_index, event_handler, render_fn, make_state, make_props, emitted_events });
         self.widget_map.insert(name, kind_index);
     }
 
     pub fn register_widget<T: Widget>(&mut self,emitted_events: EventList) {
-        self.register(T::NAME, || Box::new(T::State::default()), || Box::new(T::Props::default()), Box::new(|event: WidgetEvent, widget_data: &mut WidgetData| {
-            let (state, props) = widget_data.cast_state_mut_and_props::<T::State, T::Props>();
+        self.register(T::NAME, || Ok(Box::new(T::State::default())), || Ok(Box::new(T::Props::default())), Box::new(|event: WidgetEvent, widget_data: &mut WidgetData| {
+            let (state, props) = widget_data.cast_state_mut_and_props::<T::State, T::Props>()?;
             T::handle_event(&event, state, props);
+            Ok(())
         }), Box::new(|render_queue: &mut Vec<RenderCommand>, widget_data: &WidgetData| {
-            let (state, props) = widget_data.cast_state_and_props::<T::State, T::Props>();
+            let (state, props) = widget_data.cast_state_and_props::<T::State, T::Props>()?;
             T::render_widget(render_queue, state, props);
+            Ok(())
         }), emitted_events);
     }
 
@@ -80,20 +83,20 @@ impl WidgetRegistry {
         &self.widgets[*self.widget_map.get(name).unwrap()]
     }
 
-    pub fn make_widget_props(&self, name: &str) -> Box<dyn WidgetProps>{
+    pub fn make_widget_props(&self, name: &str) -> ViuiResult<Box<dyn WidgetProps>>{
         (self.get_widget_by_name(name).make_props)()
     }
 
-    pub fn handle_event(&self, widget_index: usize, event: WidgetEvent, widget_data: &mut WidgetData) {
-        (self.widgets[widget_index].event_handler)(event, widget_data);
+    pub fn handle_event(&self, widget_index: usize, event: WidgetEvent, widget_data: &mut WidgetData) -> ViuiResult<()>{
+        (self.widgets[widget_index].event_handler)(event, widget_data)
     }
 
     pub fn get_widget_index(&self, kind: &str) -> usize {
         *self.widget_map.get(kind).unwrap()
     }
 
-    pub fn render_widget(&self, render_queue: &mut Vec<RenderCommand>, widget_data: &WidgetData) {
-        (self.widgets[widget_data.kind_index()].render_fn)(render_queue, widget_data);
+    pub fn render_widget(&self, render_queue: &mut Vec<RenderCommand>, widget_data: &WidgetData) -> ViuiResult<()> {
+        (self.widgets[widget_data.kind_index()].render_fn)(render_queue, widget_data)
     }
 
 }

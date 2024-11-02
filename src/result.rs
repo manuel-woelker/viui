@@ -100,6 +100,14 @@ macro_rules! bail {
     };
 }
 
+
+#[macro_export]
+macro_rules! err {
+    ($($args:tt)+) => {
+        ViuiError::new(ViuiErrorKind::General(format!($($args)+).into()))
+    };
+}
+
 #[macro_export]
 macro_rules! context {
     ($fmt:expr $(, $($args:expr),+)? => $block:block) => {
@@ -113,8 +121,6 @@ pub use context;
 
 #[cfg(test)]
 mod tests {
-    use std::backtrace::Backtrace;
-    use std::error::Error;
     use crate::result::ViuiResult;
 
     #[test]
