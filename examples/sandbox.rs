@@ -93,8 +93,8 @@ fn main_internal() -> ViuiResult<()> {
                     TextPart::VariableText("counter".to_string()), ]
     });
 */
-    let render_backend = FemtovgRenderBackend::new(ui.add_render_backend(), ui.event_sender());
-    ui.start();
+    let render_backend = FemtovgRenderBackend::new(ui.add_render_backend()?, ui.event_sender());
+    ui.start()?;
     render_backend.start();
 }
 

@@ -71,6 +71,13 @@ impl From<&regex::Error> for ViuiErrorKind {
     }
 }
 
+impl From<&crossbeam_channel::RecvError> for ViuiErrorKind {
+    #[track_caller]
+    fn from(error: &crossbeam_channel::RecvError) -> Self {
+        Self::General(error.to_string())
+    }
+}
+
 impl From<bevy_reflect::ReflectPathError<'_>> for ViuiError {
     #[track_caller]
     fn from(error: bevy_reflect::ReflectPathError<'_>) -> Self {

@@ -1,22 +1,22 @@
-use std::any::type_name;
 use crate::arenal::{Arenal, Idx};
-use crate::{bail, err};
 use crate::model::ComponentNode;
 use crate::observable_state::ObservableState;
 use crate::render::command::RenderCommand;
 use crate::result::{context, ViuiError, ViuiErrorKind, ViuiResult};
 use crate::types::{Point, Rect, Size};
 use crate::widget_model::{Text, TextPart, Widget, WidgetProps, WidgetRegistry, WidgetState};
-use bevy_reflect::{DynamicEnum, DynamicVariant, FromReflect, GetPath, Reflect, TypeInfo};
+use crate::{bail, err};
+use bevy_reflect::{DynamicEnum, DynamicVariant, FromReflect, GetPath, Reflect};
 use crossbeam_channel::{select, Receiver, Sender};
-use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
 use regex::Regex;
+use std::any::type_name;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fs::File;
 use std::mem::take;
-use std::ops::{Index, IndexMut};
+use std::ops::{IndexMut};
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
@@ -74,10 +74,9 @@ impl WidgetData {
 pub struct UI {
     widget_registry: WidgetRegistry,
     state_arena: Arenal<WidgetData>,
-    hovered_widget: Option<Idx<WidgetData>>,
     app_state: Box<ObservableState>,
     event_handler: Box<dyn Fn(&mut ObservableState, &dyn Reflect) + Send>,
-    message_string_to_enum_converter: Box<dyn Fn(&str) -> Box<dyn Reflect> + Send>,
+    message_string_to_enum_converter: Box<dyn Fn(&str) -> ViuiResult<Box<dyn Reflect>> + Send>,
     mouse_position: Point,
     render_backends: Vec<RenderBackend>,
     ui_event_receiver: Receiver<UiEvent>,
@@ -100,27 +99,25 @@ impl UI {
     pub fn new<MESSAGE: Reflect + FromReflect + Debug + Sized>(state: ObservableState, event_handler: impl Fn(&mut ObservableState, &MESSAGE) + Send + 'static) -> ViuiResult<UI> {
         let (event_sender, event_receiver) = crossbeam_channel::bounded::<UiEvent>(4);
         let (file_change_sender, file_change_receiver) = crossbeam_channel::bounded::<()>(4);
-        let message_string_to_enum_converter = Box::new(|message_string: &str| -> Box<dyn Reflect> {
+        let message_string_to_enum_converter = Box::new(|message_string: &str| -> ViuiResult<Box<dyn Reflect>> {
             let dynamic_enum = DynamicEnum::new(message_string.to_string(), DynamicVariant::Unit);
-            let message = MESSAGE::from_reflect(&dynamic_enum).unwrap();
-            Box::new(message)
+            let message = MESSAGE::from_reflect(&dynamic_enum).ok_or_else(|| err!("Could not create message of type {} from string: '{}'", type_name::<MESSAGE>(), message_string))?;
+            Ok(Box::new(message))
         });
-        let mut file_watcher = new_debouncer(Duration::from_millis(10), move |res: DebounceEventResult| {
+        let file_watcher = new_debouncer(Duration::from_millis(10), move |res: DebounceEventResult| {
             match res {
                 Ok(_events) => {
-                    file_change_sender.send(()).unwrap();
+                    if let Err(err) = file_change_sender.send(()) {
+                        println!("File watcher error {:?}", err)
+                    }
                 }
-                Err(e) => println!("Error {:?}", e),
+                Err(err) => println!("File watcher error {:?}", err),
             }
         })?;
-
-        // Add a path to be watched. All files and directories at that path and
-        // below will be monitored for changes.
 
         Ok(UI {
             widget_registry: WidgetRegistry::new(),
             state_arena: Arenal::new(),
-            hovered_widget: None,
             app_state: Box::new(state),
             event_handler: Box::new(move |state, message| {
                 let typed_message = message.downcast_ref::<MESSAGE>().unwrap();
@@ -150,7 +147,7 @@ impl UI {
                         self.redraw()?;
                     }
                     recv(self.ui_event_receiver) -> event => {
-                        self.handle_ui_event(event.unwrap());
+                        self.handle_ui_event(event?)?;
                         self.redraw()?;
                     }
                     };
@@ -170,7 +167,7 @@ impl UI {
         self.perform_layout();
         let render_backends = take(&mut self.render_backends);
         for backend in &render_backends {
-            let render_commands = self.make_render_commands();
+            let render_commands = self.make_render_commands()?;
             backend.render_backend_sender.send(RenderBackendMessage {
                 render_commands,
             }).unwrap();
@@ -184,13 +181,13 @@ impl UI {
         self.ui_event_sender.clone()
     }
 
-    pub fn add_render_backend(&mut self) -> Receiver<RenderBackendMessage> {
+    pub fn add_render_backend(&mut self) -> ViuiResult<Receiver<RenderBackendMessage>> {
         let (render_backend_sender, message_receiver) = crossbeam_channel::bounded::<RenderBackendMessage>(4);
         self.render_backends.push(RenderBackend {
             render_backend_sender
         });
-        self.redraw();
-        message_receiver
+        self.redraw()?;
+        Ok(message_receiver)
     }
 
 
@@ -210,14 +207,14 @@ impl UI {
         self.state_arena.entries_mut()
     }
 
-    pub fn handle_ui_event(&mut self, event: UiEvent) {
+    pub fn handle_ui_event(&mut self, event: UiEvent) -> ViuiResult<()> {
         match event.kind {
             MouseMoved(position) => {
                 self.mouse_position = position;
                 for widget in self.state_arena.entries_mut() {
-                    self.widget_registry.handle_event(widget.kind_index, WidgetEvent::mouse_out(), widget);
+                    self.widget_registry.handle_event(widget.kind_index, WidgetEvent::mouse_out(), widget)?;
                     if widget.layout.bounds.contains(position) {
-                        self.widget_registry.handle_event(widget.kind_index, WidgetEvent::mouse_over(), widget);
+                        self.widget_registry.handle_event(widget.kind_index, WidgetEvent::mouse_over(), widget)?;
                         //                        break;
                     }
                 }
@@ -227,18 +224,19 @@ impl UI {
                 for widget in self.state_arena.entries_mut() {
                     if widget.layout.bounds.contains(position) {
                         if input.mouse_event_kind == MouseEventKind::Pressed {
-                            self.widget_registry.handle_event(widget.kind_index, WidgetEvent::mouse_press(), widget);
+                            self.widget_registry.handle_event(widget.kind_index, WidgetEvent::mouse_press(), widget)?;
                             // Found clicked widget
                             if let Some(message) = widget.event_mappings.get("click") {
                                 (self.event_handler)(self.app_state.as_mut(), message.as_ref());
                             }
                         } else if input.mouse_event_kind == MouseEventKind::Released {
-                            self.widget_registry.handle_event(widget.kind_index, WidgetEvent::mouse_release(), widget);
+                            self.widget_registry.handle_event(widget.kind_index, WidgetEvent::mouse_release(), widget)?;
                         }
                     }
                 }
             }
         }
+        Ok(())
     }
 
     pub fn register_widget<T: Widget>(&mut self) {
@@ -266,15 +264,15 @@ impl UI {
         }
     }
 
-    pub fn make_render_commands(&self) -> Vec<RenderCommand> {
+    pub fn make_render_commands(&self) -> ViuiResult<Vec<RenderCommand>> {
         let mut render_commands: Vec<RenderCommand> = Vec::new();
         for widget in self.state_arena.entries() {
             render_commands.push(RenderCommand::Save);
-            self.widget_registry.render_widget(&mut render_commands, widget);
+            self.widget_registry.render_widget(&mut render_commands, widget)?;
             render_commands.push(RenderCommand::Restore);
             render_commands.push(RenderCommand::Translate { x: 0.0, y: 40.0 })
         }
-        render_commands
+        Ok(render_commands)
     }
 
     pub fn set_widget_prop(&mut self, widget_index: &Idx<WidgetData>, field_name: &str, text: Text) {
@@ -320,7 +318,7 @@ impl UI {
                 self.set_widget_prop(&widget_idx, &prop, expression_to_text(&expression)?);
             }
             for (event_name, message_name) in child.events {
-                self.set_event_mapping_boxed(&widget_idx, &event_name, (self.message_string_to_enum_converter)(&message_name));
+                self.set_event_mapping_boxed(&widget_idx, &event_name, (self.message_string_to_enum_converter)(&message_name)?);
             }
         }
         Ok(())

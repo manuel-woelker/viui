@@ -95,7 +95,7 @@ impl FemtovgRenderBackend {
 fn create_window(event_loop: &EventLoop<RenderBackendMessage>) -> (PossiblyCurrentContext, Display, Window, Surface<WindowSurface>) {
     let window_builder = WindowBuilder::new()
         .with_inner_size(PhysicalSize::new(1000., 600.))
-        .with_title("Femtovg");
+        .with_title("viui");
 
     let template = ConfigTemplateBuilder::new().with_alpha_size(8);
 
