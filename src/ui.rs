@@ -194,7 +194,7 @@ impl UI {
     }
 
 
-    pub fn add_widget2(&mut self, kind: &str) -> ViuiResult<Idx<WidgetData>> {
+    pub fn add_widget(&mut self, kind: &str) -> ViuiResult<Idx<WidgetData>> {
         let widget_descriptor = self.widget_registry.get_widget_by_name(kind);
         Ok(self.state_arena.insert(WidgetData {
             kind_index: widget_descriptor.kind_index,
@@ -204,18 +204,6 @@ impl UI {
             prop_expressions: Vec::new(),
             event_mappings: Default::default(),
         }))
-    }
-
-    pub fn add_widget<S: WidgetState, P: WidgetProps>(&mut self, kind: &str, state: S, props: P) -> Idx<WidgetData> {
-        let kind_index = self.widget_registry.get_widget_index(kind);
-        self.state_arena.insert(WidgetData {
-            kind_index,
-            state: Box::new(state),
-            props: Box::new(props),
-            layout: LayoutInfo::default(),
-            prop_expressions: Vec::new(),
-            event_mappings: Default::default(),
-        })
     }
 
     pub fn widgets(&mut self) -> impl Iterator<Item=&mut WidgetData> {
@@ -327,7 +315,7 @@ impl UI {
     pub fn set_root_node(&mut self, root: ComponentNode) -> ViuiResult<()> {
         self.state_arena.clear();
         for child in root.children {
-            let widget_idx = self.add_widget2(&child.kind)?;
+            let widget_idx = self.add_widget(&child.kind)?;
             for (prop, expression) in child.props {
                 self.set_widget_prop(&widget_idx, &prop, expression_to_text(&expression)?);
             }
