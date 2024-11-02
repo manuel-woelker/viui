@@ -64,9 +64,9 @@ impl From<&serde_yml::Error> for ViuiErrorKind {
     }
 }
 
-impl From<&regex::Error> for ViuiErrorKind {
+impl From<&regex_lite::Error> for ViuiErrorKind {
     #[track_caller]
-    fn from(error: &regex::Error) -> Self {
+    fn from(error: &regex_lite::Error) -> Self {
         Self::General(error.to_string())
     }
 }

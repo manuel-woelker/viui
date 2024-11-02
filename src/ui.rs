@@ -10,7 +10,6 @@ use bevy_reflect::{DynamicEnum, DynamicVariant, FromReflect, GetPath, Reflect};
 use crossbeam_channel::{select, Receiver, Sender};
 use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
-use regex::Regex;
 use std::any::type_name;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -20,6 +19,7 @@ use std::ops::{IndexMut};
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
+use regex_lite::Regex;
 use UiEventKind::MouseMoved;
 
 pub type StateBox = Box<dyn WidgetState>;
