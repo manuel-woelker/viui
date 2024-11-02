@@ -71,12 +71,15 @@ impl WidgetData {
     }
 }
 
+pub type ApplicationEventHandler = Box<dyn Fn(&mut ObservableState, &dyn Reflect) + Send>;
+pub type MessageStringToEnumConverter = Box<dyn Fn(&str) -> ViuiResult<Box<dyn Reflect>> + Send>;
+
 pub struct UI {
     widget_registry: WidgetRegistry,
     state_arena: Arenal<WidgetData>,
     app_state: Box<ObservableState>,
-    event_handler: Box<dyn Fn(&mut ObservableState, &dyn Reflect) + Send>,
-    message_string_to_enum_converter: Box<dyn Fn(&str) -> ViuiResult<Box<dyn Reflect>> + Send>,
+    event_handler: ApplicationEventHandler,
+    message_string_to_enum_converter: MessageStringToEnumConverter,
     mouse_position: Point,
     render_backends: Vec<RenderBackend>,
     ui_event_receiver: Receiver<UiEvent>,
@@ -276,17 +279,17 @@ impl UI {
     }
 
     pub fn set_widget_prop(&mut self, widget_index: &Idx<WidgetData>, field_name: &str, text: Text) {
-        self.state_arena[&widget_index].prop_expressions.push(PropExpression {
+        self.state_arena[widget_index].prop_expressions.push(PropExpression {
             field_name: field_name.to_string(),
             text,
         });
     }
 
     pub fn set_event_mapping<T: Reflect>(&mut self, widget_index: &Idx<WidgetData>, event: &str, message: T) {
-        self.state_arena.index_mut(&widget_index).event_mappings.insert(event.to_string(), Box::new(message));
+        self.state_arena.index_mut(widget_index).event_mappings.insert(event.to_string(), Box::new(message));
     }
     pub fn set_event_mapping_boxed(&mut self, widget_index: &Idx<WidgetData>, event: &str, message: Box<dyn Reflect>) {
-        self.state_arena.index_mut(&widget_index).event_mappings.insert(event.to_string(), message);
+        self.state_arena.index_mut(widget_index).event_mappings.insert(event.to_string(), message);
     }
 
 

@@ -33,6 +33,12 @@ pub struct Idx<T> {
 }
 
 
+impl<T> Default for Arenal<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl <T> Arenal<T> {
     pub fn new() -> Self<> {
         Self {
@@ -85,7 +91,7 @@ impl <T> Index<&Idx<T>> for Arenal<T> {
         if idx.generation != *generation {
             panic!("wrong generation in index: {} != {}", idx.generation, generation);
         }
-        &value
+        value
     }
 }
 

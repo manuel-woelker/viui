@@ -132,7 +132,7 @@ mod tests {
 
     #[test]
     fn test_context_macro_ok() {
-        let result = (|| -> ViuiResult<u32> {
+        let _result = (|| -> ViuiResult<u32> {
             return context!("grok stuff for {}", "bar" => {
                 Ok(0)
             })

@@ -47,6 +47,12 @@ pub struct WidgetRegistry {
     pub widget_map: HashMap<String, usize>,
 }
 
+impl Default for WidgetRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WidgetRegistry {
     pub fn new() -> Self {
         Self {
