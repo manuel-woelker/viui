@@ -27,6 +27,7 @@ use winit::platform::run_return::EventLoopExtRunReturn;
 use viui::model::ComponentNode;
 use viui::observable_state::{ObservableState, TypedPath};
 use viui::render::backend_femtovg::FemtovgRenderBackend;
+use viui::result::ViuiResult;
 use viui::types::{Point, Rect, Size};
 use viui::ui::{MouseEventKind, UiEvent, WidgetData, WidgetEvent, WidgetEventKind, UI};
 use viui::widget_model::{Text, TextPart, WidgetState, WidgetModel, ButtonWidgetProps, WidgetProps, WidgetRegistry, ButtonWidget, ButtonWidgetState};
@@ -44,6 +45,12 @@ enum AppMessage {
 
 
 fn main() {
+    if let Err(error) = main_internal() {
+        println!("Aborted with error: {:?}", error);
+        std::process::exit(1);
+    }
+}
+fn main_internal() -> ViuiResult<()> {
     println!("Starting VIUI");
 
     let app_state = ObservableState::new(AppState { counter: 19 });
@@ -63,9 +70,9 @@ fn main() {
                 });
             }
         }
-    });
+    })?;
     ui.register_widget::<ButtonWidget>();
-    ui.set_root_node_file("counter.viui.yaml");
+    ui.set_root_node_file("counter.viui.yaml")?;
     /*
 
     let label_idx = ui.add_widget("button", ButtonWidgetState::default(), ButtonWidgetProps {

@@ -116,6 +116,6 @@ mod tests {
         let mut arenal: Arenal<&str> = Arenal::new();
         let foo_idx = arenal.insert("foo");
         assert_eq!(arenal.entries.len(), 1);
-        assert_eq!(arenal[foo_idx], "foo");
+        assert_eq!(arenal[&foo_idx], "foo");
     }
 }

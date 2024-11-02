@@ -13,9 +13,11 @@ use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
 use regex::Regex;
 use UiEventKind::MouseMoved;
 use crate::arenal::{Arenal, Idx};
+use crate::bail;
 use crate::model::ComponentNode;
 use crate::observable_state::ObservableState;
 use crate::render::command::RenderCommand;
+use crate::result::{context, ViuiError, ViuiErrorKind, ViuiResult};
 use crate::types::{Point, Rect, Size};
 use crate::widget_model::{ButtonWidgetProps, ButtonWidgetState, Text, TextPart, Widget, WidgetEventHandler, WidgetProps, WidgetRegistry, WidgetState};
 
@@ -105,7 +107,7 @@ pub struct RenderBackendMessage {
 }
 
 impl UI {
-    pub fn new<MESSAGE: Reflect + FromReflect + Debug + Sized>(state: ObservableState, event_handler: impl Fn(&mut ObservableState, &MESSAGE) + Send + 'static) -> UI {
+    pub fn new<MESSAGE: Reflect + FromReflect + Debug + Sized>(state: ObservableState, event_handler: impl Fn(&mut ObservableState, &MESSAGE) + Send + 'static) -> ViuiResult<UI> {
         let (event_sender, event_receiver) = crossbeam_channel::bounded::<UiEvent>(4);
         let (file_change_sender, file_change_receiver) = crossbeam_channel::bounded::<()>(4);
         let message_string_to_enum_converter = Box::new(|message_string: &str| -> Box<dyn Reflect> {
@@ -117,15 +119,15 @@ impl UI {
             match res {
                 Ok(_events) => {
                     file_change_sender.send(()).unwrap();
-                },
-                Err(e) => println!("Error {:?}",e),
+                }
+                Err(e) => println!("Error {:?}", e),
             }
-        }).unwrap();
+        })?;
 
         // Add a path to be watched. All files and directories at that path and
         // below will be monitored for changes.
 
-        UI {
+        Ok(UI {
             widget_registry: WidgetRegistry::new(),
             state_arena: Arenal::new(),
             hovered_widget: None,
@@ -142,30 +144,39 @@ impl UI {
             file_change_receiver,
             file_watcher,
             root_node_file: Default::default(),
-        }
+        })
     }
 
-    pub fn start(mut self){
+    pub fn start(mut self) -> ViuiResult<()> {
         thread::Builder::new()
-         .name("VIUI Thread".into()).spawn(move || {
+            .name("VIUI Thread".into()).spawn(move || {
             println!("Running main loop");
+
             loop {
-                select! {
+                let result: ViuiResult<()> = (|| {
+                    select! {
                     recv(self.file_change_receiver) -> _event => {
-                        self.load_root_node_file();
-                        self.redraw();
+                        self.load_root_node_file()?;
+                        self.redraw()?;
                     }
                     recv(self.ui_event_receiver) -> event => {
                         self.handle_ui_event(event.unwrap());
-                        self.redraw();
+                        self.redraw()?;
                     }
+                    };
+                    Ok(())
+                })();
+                if let Err(err) = result {
+                    println!("Error in VIUI Thread: {:?}", err);
+                    std::process::exit(1);
                 }
             }
-        }).unwrap();
+        })?;
+        Ok(())
     }
 
-    pub fn redraw(&mut self){
-        self.eval_expressions();
+    pub fn redraw(&mut self) -> ViuiResult<()> {
+        self.eval_expressions()?;
         self.perform_layout();
         let render_backends = take(&mut self.render_backends);
         for backend in &render_backends {
@@ -175,8 +186,8 @@ impl UI {
             }).unwrap();
         }
         self.render_backends = render_backends;
+        Ok(())
     }
-
 
 
     pub fn event_sender(&self) -> Sender<UiEvent> {
@@ -256,13 +267,14 @@ impl UI {
         self.widget_registry.register_widget::<T>(vec!["click".to_string()]);
     }
 
-    pub fn eval_expressions(&mut self) {
+    pub fn eval_expressions(&mut self) -> ViuiResult<()> {
         for widget in self.state_arena.entries_mut() {
             for expression in &widget.prop_expressions {
-                let string = text_to_string(self.app_state.as_ref(), &expression.text.parts);
-                widget.props.reflect_path_mut(&*expression.field_name).unwrap().apply(&string);
+                let string = text_to_string(self.app_state.as_ref(), &expression.text.parts)?;
+                widget.props.reflect_path_mut(&*expression.field_name)?.apply(&string);
             }
         }
+        Ok(())
     }
 
 
@@ -302,45 +314,50 @@ impl UI {
     }
 
 
-    pub fn set_root_node_file<P: AsRef<Path>>(&mut self, root_path: P) {
-        self.root_node_file = root_path.as_ref().to_path_buf();
-        self.load_root_node_file();
+    pub fn set_root_node_file<P: AsRef<Path>>(&mut self, root_path: P) -> ViuiResult<()> {
+        context!("set root context file {:?}", self.root_node_file => {
+            self.root_node_file = root_path.as_ref().to_path_buf();
+            self.load_root_node_file()?;
 
-        // Add a path to be watched. All files and directories at that path and
-        // below will be monitored for changes.
-        self.file_watcher.watcher().watch(&self.root_node_file, RecursiveMode::Recursive).unwrap();
+            // Add a path to be watched. All files and directories at that path and
+            // below will be monitored for changes.
+            self.file_watcher.watcher().watch(&self.root_node_file, RecursiveMode::Recursive)?;
+            Ok(())
+        })
     }
 
-    fn load_root_node_file(&mut self) {
-        let model: ComponentNode = serde_yml::from_reader(File::open(&self.root_node_file).unwrap()).unwrap();
-        self.set_root_node(model);
+    fn load_root_node_file(&mut self) -> ViuiResult<()> {
+        context!("load root context file {:?}", self.root_node_file => {
+            let model: ComponentNode = serde_yml::from_reader(File::open(&self.root_node_file)?)?;
+            self.set_root_node(model)?;
+            Ok(())
+        })
     }
 
-    pub fn set_root_node(&mut self, root: ComponentNode) {
+    pub fn set_root_node(&mut self, root: ComponentNode) -> ViuiResult<()> {
         self.state_arena.clear();
         for child in root.children {
             let widget_idx = self.add_widget2(&child.kind);
             for (prop, expression) in child.props {
-                self.set_widget_prop(&widget_idx, &prop, expression_to_text(&expression));
+                self.set_widget_prop(&widget_idx, &prop, expression_to_text(&expression)?);
             }
             for (event_name, message_name) in child.events {
                 self.set_event_mapping_boxed(&widget_idx, &event_name, (self.message_string_to_enum_converter)(&message_name));
             }
         }
+        Ok(())
     }
-
 }
 
-fn expression_to_text(original_expression: &str) -> Text {
-    let mut parts =  vec![];
-    let string_regex = Regex::new(r#"^([^$]*)"#).unwrap();
-    let placeholder_regex = Regex::new(r#"^\$\{([^}]+)}"#).unwrap();
+fn expression_to_text(original_expression: &str) -> ViuiResult<Text> {
+    let mut parts = vec![];
+    let string_regex = Regex::new(r#"^([^$]+)"#)?;
+    let placeholder_regex = Regex::new(r#"^\$\{([^}]+)}"#)?;
     let mut matched = true;
     let mut expression = original_expression;
     while !expression.is_empty() {
-        // TODO: error handling
         if !matched {
-            panic!("Failed to parse placeholder expression: '{}' at '{}'", original_expression, expression);
+            bail!("Failed to parse placeholder expression: '{}' at '{}'", original_expression, expression);
         }
         matched = false;
         if let Some(found) = string_regex.find(expression) {
@@ -349,30 +366,29 @@ fn expression_to_text(original_expression: &str) -> Text {
             matched = true;
         }
         if let Some(found) = placeholder_regex.find(expression) {
-            parts.push(TextPart::VariableText(expression[found.start()+2..found.end()-1].to_string()));
+            parts.push(TextPart::VariableText(expression[found.start() + 2..found.end() - 1].to_string()));
             expression = &expression[found.end()..];
             matched = true;
         }
-
     }
-    Text {
+    Ok(Text {
         parts,
-    }
+    })
 }
 
-fn text_to_string(app_state: &ObservableState, text: &Vec<TextPart>) -> String {
+fn text_to_string(app_state: &ObservableState, text: &Vec<TextPart>) -> ViuiResult<String> {
     let mut string = "".to_string();
     for part in text {
         match part {
             TextPart::FixedText(fixed_string) => {
-                string.push_str(fixed_string);
+                string.push_str(fixed_string.as_str());
             }
             TextPart::VariableText(path) => {
-                string.push_str(&format!("{:?}", app_state.state().reflect_path(&**path).unwrap()));
+                string.push_str(&format!("{:?}", app_state.state().reflect_path(&**path)?));
             }
         }
     }
-    string
+    Ok(string)
 }
 
 
