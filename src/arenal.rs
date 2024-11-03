@@ -135,11 +135,11 @@ mod tests {
 
     #[test]
     fn test_size() {
-        assert_eq!(std::mem::size_of::<Idx<()>>(), 8);
-        assert_eq!(std::mem::size_of::<Idx<u32>>(), 8);
+        assert_eq!(size_of::<Idx<()>>(), 8);
+        assert_eq!(size_of::<Idx<u32>>(), 8);
 
-        assert_eq!(std::mem::size_of::<Entry<()>>(), 2);
-        assert_eq!(std::mem::size_of::<Entry<u32>>(), 8);
+        assert_eq!(size_of::<Entry<()>>(), 2);
+        assert_eq!(size_of::<Entry<u32>>(), 8);
     }
 
     #[test]
