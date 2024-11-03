@@ -19,6 +19,7 @@ use std::ops::{IndexMut};
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
+use log::debug;
 use regex_lite::Regex;
 use UiEventKind::MouseMoved;
 
@@ -141,7 +142,7 @@ impl UI {
     pub fn start(mut self) -> ViuiResult<()> {
         thread::Builder::new()
             .name("VIUI Thread".into()).spawn(move || {
-            println!("Running main loop");
+            debug!("Running main loop");
 
             loop {
                 let result: ViuiResult<()> = (|| {

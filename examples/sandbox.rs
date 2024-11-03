@@ -1,5 +1,7 @@
 use bevy_reflect::{ParsedPath, Reflect};
-
+use log::{error, info};
+use tracing::Level;
+use viui::logging::init_logging;
 use viui::observable_state::{ObservableState, TypedPath};
 use viui::render::backend_femtovg::FemtovgRenderBackend;
 use viui::result::ViuiResult;
@@ -20,15 +22,16 @@ enum AppMessage {
 
 fn main() {
     if let Err(error) = main_internal() {
-        println!("Aborted with error: {:?}", error);
+        error!("Aborted with error: {:?}", error);
         std::process::exit(1);
     }
 }
 fn main_internal() -> ViuiResult<()> {
-    println!("Starting VIUI");
+    init_logging()?;
+    info!("Starting VIUI");
 
     let app_state = ObservableState::new(AppState { counter: 19 });
-    let counter_path = TypedPath::<i32>::new(ParsedPath::parse("counter").unwrap());
+    let counter_path = TypedPath::<i32>::new(ParsedPath::parse("counter")?);
     let mut widget_registry = WidgetRegistry::new();
     widget_registry.register_widget::<ButtonWidget>(vec!["click".to_string()]);
     let mut ui = UI::new(app_state, move |app_state, message: &AppMessage| {
@@ -47,28 +50,9 @@ fn main_internal() -> ViuiResult<()> {
     })?;
     ui.register_widget::<ButtonWidget>();
     ui.set_root_node_file("counter.viui.yaml")?;
-    /*
-
-    let label_idx = ui.add_widget("button", ButtonWidgetState::default(), ButtonWidgetProps {
-        label: "Counter".to_string(),
-    });
-    let increment_button = ui.add_widget("button", ButtonWidgetState::default(), ButtonWidgetProps {
-        label: "Increment".to_string(),
-    }, );
-    ui.set_event_mapping(&increment_button, "click", AppMessage::Increment);
-
-    let decrement_button = ui.add_widget("button", ButtonWidgetState::default(), ButtonWidgetProps {
-        label: "Decrement".to_string(),
-    }, );
-    ui.set_event_mapping(&decrement_button, "click", AppMessage::Decrement);
-
-    ui.set_widget_prop(&label_idx, "label", Text {
-        parts: vec![TextPart::FixedText("The Counter: ".to_string()),
-                    TextPart::VariableText("counter".to_string()), ]
-    });
-*/
     let render_backend = FemtovgRenderBackend::new(ui.add_render_backend()?, ui.event_sender());
     ui.start()?;
+    info!("VIUI started");
     render_backend.start();
 }
 

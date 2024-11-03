@@ -8,3 +8,4 @@ pub mod render_commands;
 pub mod render;
 pub mod model;
 pub mod result;
+pub mod logging;
