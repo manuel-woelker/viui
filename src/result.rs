@@ -108,14 +108,14 @@ impl From<&str> for ViuiError {
 #[macro_export]
 macro_rules! bail {
     ($($args:tt)+) => {
-        return Err(ViuiError::new(ViuiErrorKind::General(format!($($args)+).into())));
+        return Err($crate::result::ViuiError::new($crate::result::ViuiErrorKind::General(format!($($args)+).into())));
     };
 }
 
 #[macro_export]
 macro_rules! err {
     ($($args:tt)+) => {
-        ViuiError::new(ViuiErrorKind::General(format!($($args)+).into()))
+        $crate::result::ViuiError::new($crate::result::ViuiErrorKind::General(format!($($args)+).into()))
     };
 }
 

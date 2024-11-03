@@ -1,11 +1,11 @@
 use bevy_reflect::{ParsedPath, Reflect};
 use log::{error, info};
 use viui::logging::init_logging;
+use viui::nodes::elements::button::ButtonElement;
 use viui::observable_state::{ObservableState, TypedPath};
 use viui::render::backend_femtovg::FemtovgRenderBackend;
 use viui::result::ViuiResult;
 use viui::ui::UI;
-use viui::widget_model::{ButtonWidget, WidgetRegistry};
 
 #[derive(Debug, Reflect)]
 struct AppState {
@@ -26,12 +26,10 @@ fn main() {
 }
 fn main_internal() -> ViuiResult<()> {
     init_logging()?;
-    info!("Starting VIUI");
+    info!("VIUI Sandbox starting");
 
     let app_state = ObservableState::new(AppState { counter: 19 });
     let counter_path = TypedPath::<i32>::new(ParsedPath::parse("counter")?);
-    let mut widget_registry = WidgetRegistry::new();
-    widget_registry.register_widget::<ButtonWidget>(vec!["click".to_string()]);
     let mut ui = UI::new(
         app_state,
         move |app_state, message: &AppMessage| match message {
@@ -47,10 +45,10 @@ fn main_internal() -> ViuiResult<()> {
             }
         },
     )?;
-    ui.register_widget::<ButtonWidget>();
+    ui.register_node::<ButtonElement>();
     ui.set_root_node_file("counter.viui.yaml")?;
     let render_backend = FemtovgRenderBackend::new(ui.add_render_backend()?, ui.event_sender());
     ui.start()?;
-    info!("VIUI started");
+    info!("VIUI Sandbox started");
     render_backend.start();
 }

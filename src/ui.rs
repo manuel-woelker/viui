@@ -1,10 +1,13 @@
 use crate::arenal::{Arenal, Idx};
-use crate::model::ComponentNode;
+use crate::model::{ComponentNode, Text, TextPart};
+use crate::nodes::data::{LayoutInfo, NodeData, PropExpression};
+use crate::nodes::elements::kind::Element;
+use crate::nodes::events::NodeEvent;
+use crate::nodes::registry::NodeRegistry;
 use crate::observable_state::ObservableState;
 use crate::render::command::RenderCommand;
-use crate::result::{context, ViuiError, ViuiErrorKind, ViuiResult};
+use crate::result::{context, ViuiResult};
 use crate::types::{Point, Rect, Size};
-use crate::widget_model::{Text, TextPart, Widget, WidgetProps, WidgetRegistry, WidgetState};
 use crate::{bail, err};
 use bevy_reflect::{DynamicEnum, DynamicVariant, FromReflect, GetPath, Reflect};
 use crossbeam_channel::{select, Receiver, Sender};
@@ -13,7 +16,6 @@ use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
 use regex_lite::Regex;
 use std::any::type_name;
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fs::File;
 use std::mem::take;
@@ -22,7 +24,7 @@ use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
 use UiEventKind::MouseMoved;
-
+/*
 pub type StateBox = Box<dyn WidgetState>;
 pub type PropsBox = Box<dyn WidgetProps>;
 
@@ -31,7 +33,7 @@ pub struct LayoutInfo {
     bounds: Rect,
 }
 
-pub struct WidgetData {
+pub struct NodeData {
     kind_index: usize,
     layout: LayoutInfo,
     state: StateBox,
@@ -45,7 +47,7 @@ pub struct PropExpression {
     pub text: Text,
 }
 
-impl WidgetData {
+impl NodeData {
     pub fn cast_state_mut_and_props<S: 'static, P: 'static>(&mut self) -> ViuiResult<(&mut S, &P)> {
         let state = self
             .state
@@ -86,13 +88,14 @@ impl WidgetData {
         self.kind_index
     }
 }
+*/
 
 pub type ApplicationEventHandler = Box<dyn Fn(&mut ObservableState, &dyn Reflect) + Send>;
 pub type MessageStringToEnumConverter = Box<dyn Fn(&str) -> ViuiResult<Box<dyn Reflect>> + Send>;
 
 pub struct UI {
-    widget_registry: WidgetRegistry,
-    state_arena: Arenal<WidgetData>,
+    node_registry: NodeRegistry,
+    state_arena: Arenal<NodeData>,
     app_state: Box<ObservableState>,
     event_handler: ApplicationEventHandler,
     message_string_to_enum_converter: MessageStringToEnumConverter,
@@ -146,7 +149,7 @@ impl UI {
         )?;
 
         Ok(UI {
-            widget_registry: WidgetRegistry::new(),
+            node_registry: NodeRegistry::new(),
             state_arena: Arenal::new(),
             app_state: Box::new(state),
             event_handler: Box::new(move |state, message| {
@@ -222,9 +225,9 @@ impl UI {
         Ok(message_receiver)
     }
 
-    pub fn add_widget(&mut self, kind: &str) -> ViuiResult<Idx<WidgetData>> {
-        let widget_descriptor = self.widget_registry.get_widget_by_name(kind);
-        Ok(self.state_arena.insert(WidgetData {
+    pub fn add_widget(&mut self, kind: &str) -> ViuiResult<Idx<NodeData>> {
+        let widget_descriptor = self.node_registry.get_node_by_name(kind);
+        Ok(self.state_arena.insert(NodeData {
             kind_index: widget_descriptor.kind_index,
             state: (widget_descriptor.make_state)()?,
             props: (widget_descriptor.make_props)()?,
@@ -234,7 +237,7 @@ impl UI {
         }))
     }
 
-    pub fn widgets(&mut self) -> impl Iterator<Item = &mut WidgetData> {
+    pub fn widgets(&mut self) -> impl Iterator<Item = &mut NodeData> {
         self.state_arena.entries_mut()
     }
 
@@ -243,15 +246,15 @@ impl UI {
             MouseMoved(position) => {
                 self.mouse_position = position;
                 for widget in self.state_arena.entries_mut() {
-                    self.widget_registry.handle_event(
+                    self.node_registry.handle_event(
                         widget.kind_index,
-                        WidgetEvent::mouse_out(),
+                        NodeEvent::mouse_out(),
                         widget,
                     )?;
                     if widget.layout.bounds.contains(position) {
-                        self.widget_registry.handle_event(
+                        self.node_registry.handle_event(
                             widget.kind_index,
-                            WidgetEvent::mouse_over(),
+                            NodeEvent::mouse_over(),
                             widget,
                         )?;
                         //                        break;
@@ -263,9 +266,9 @@ impl UI {
                 for widget in self.state_arena.entries_mut() {
                     if widget.layout.bounds.contains(position) {
                         if input.mouse_event_kind == MouseEventKind::Pressed {
-                            self.widget_registry.handle_event(
+                            self.node_registry.handle_event(
                                 widget.kind_index,
-                                WidgetEvent::mouse_press(),
+                                NodeEvent::mouse_press(),
                                 widget,
                             )?;
                             // Found clicked widget
@@ -273,9 +276,9 @@ impl UI {
                                 (self.event_handler)(self.app_state.as_mut(), message.as_ref());
                             }
                         } else if input.mouse_event_kind == MouseEventKind::Released {
-                            self.widget_registry.handle_event(
+                            self.node_registry.handle_event(
                                 widget.kind_index,
-                                WidgetEvent::mouse_release(),
+                                NodeEvent::mouse_release(),
                                 widget,
                             )?;
                         }
@@ -286,9 +289,9 @@ impl UI {
         Ok(())
     }
 
-    pub fn register_widget<T: Widget>(&mut self) {
-        self.widget_registry
-            .register_widget::<T>(vec!["click".to_string()]);
+    pub fn register_node<T: Element>(&mut self) {
+        self.node_registry
+            .register_node::<T>(vec!["click".to_string()]);
     }
 
     pub fn eval_expressions(&mut self) -> ViuiResult<()> {
@@ -321,20 +324,15 @@ impl UI {
         let mut render_commands: Vec<RenderCommand> = Vec::new();
         for widget in self.state_arena.entries() {
             render_commands.push(RenderCommand::Save);
-            self.widget_registry
-                .render_widget(&mut render_commands, widget)?;
+            self.node_registry
+                .render_node(&mut render_commands, widget)?;
             render_commands.push(RenderCommand::Restore);
             render_commands.push(RenderCommand::Translate { x: 0.0, y: 40.0 })
         }
         Ok(render_commands)
     }
 
-    pub fn set_widget_prop(
-        &mut self,
-        widget_index: &Idx<WidgetData>,
-        field_name: &str,
-        text: Text,
-    ) {
+    pub fn set_widget_prop(&mut self, widget_index: &Idx<NodeData>, field_name: &str, text: Text) {
         self.state_arena[widget_index]
             .prop_expressions
             .push(PropExpression {
@@ -345,7 +343,7 @@ impl UI {
 
     pub fn set_event_mapping<T: Reflect>(
         &mut self,
-        widget_index: &Idx<WidgetData>,
+        widget_index: &Idx<NodeData>,
         event: &str,
         message: T,
     ) {
@@ -356,7 +354,7 @@ impl UI {
     }
     pub fn set_event_mapping_boxed(
         &mut self,
-        widget_index: &Idx<WidgetData>,
+        widget_index: &Idx<NodeData>,
         event: &str,
         message: Box<dyn Reflect>,
     ) {
