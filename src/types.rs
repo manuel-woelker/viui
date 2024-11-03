@@ -1,4 +1,4 @@
-use rgb::{RGBA8};
+use rgb::RGBA8;
 
 pub struct ScreenSpace;
 pub type Color = RGBA8;

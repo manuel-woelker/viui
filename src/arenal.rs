@@ -22,8 +22,7 @@ struct Occupied<T> {
     value: T,
 }
 
-struct Empty {
-}
+struct Empty {}
 
 pub struct Idx<T> {
     arenal_id: ArenalId,
@@ -32,15 +31,14 @@ pub struct Idx<T> {
     marker: std::marker::PhantomData<T>,
 }
 
-
 impl<T> Default for Arenal<T> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl <T> Arenal<T> {
-    pub fn new() -> Self<> {
+impl<T> Arenal<T> {
+    pub fn new() -> Self {
         Self {
             arenal_id: random(),
             entries: Vec::new(),
@@ -52,7 +50,6 @@ impl <T> Arenal<T> {
         self.arenal_id = random();
     }
 
-
     pub fn insert(&mut self, value: T) -> Idx<T> {
         let generation: Generation = Generation::new(1).unwrap();
         let index = Idx {
@@ -61,57 +58,76 @@ impl <T> Arenal<T> {
             offset: self.entries.len() as u32,
             marker: std::marker::PhantomData,
         };
-        self.entries.push(Entry::Occupied(Occupied {
-            generation,
-            value,
-        }));
+        self.entries
+            .push(Entry::Occupied(Occupied { generation, value }));
         index
     }
 
     pub fn entries_mut(&mut self) -> impl Iterator<Item = &mut T> {
-        self.entries.iter_mut().filter_map(|item| if let Entry::Occupied(o) = item { Some(&mut o.value) } else { None })
+        self.entries.iter_mut().filter_map(|item| {
+            if let Entry::Occupied(o) = item {
+                Some(&mut o.value)
+            } else {
+                None
+            }
+        })
     }
 
     pub fn entries(&self) -> impl Iterator<Item = &T> {
-        self.entries.iter().filter_map(|item| if let Entry::Occupied(o) = item { Some(&o.value) } else { None })
+        self.entries.iter().filter_map(|item| {
+            if let Entry::Occupied(o) = item {
+                Some(&o.value)
+            } else {
+                None
+            }
+        })
     }
-
 }
 
-impl <T> Index<&Idx<T>> for Arenal<T> {
+impl<T> Index<&Idx<T>> for Arenal<T> {
     type Output = T;
     fn index(&self, idx: &Idx<T>) -> &T {
         if idx.arenal_id != self.arenal_id {
-            panic!("wrong arenal_id in index: {} != {}", idx.arenal_id, self.arenal_id);
+            panic!(
+                "wrong arenal_id in index: {} != {}",
+                idx.arenal_id, self.arenal_id
+            );
         }
         let entry = &self.entries[idx.offset as usize];
         let Entry::Occupied(Occupied { value, generation }) = entry else {
             panic!("not occupied");
         };
         if idx.generation != *generation {
-            panic!("wrong generation in index: {} != {}", idx.generation, generation);
+            panic!(
+                "wrong generation in index: {} != {}",
+                idx.generation, generation
+            );
         }
         value
     }
 }
 
-impl <T> IndexMut<&Idx<T>> for Arenal<T> {
+impl<T> IndexMut<&Idx<T>> for Arenal<T> {
     fn index_mut(&mut self, idx: &Idx<T>) -> &mut T {
         if idx.arenal_id != self.arenal_id {
-            panic!("wrong arenal_id in index: {} != {}", idx.arenal_id, self.arenal_id);
+            panic!(
+                "wrong arenal_id in index: {} != {}",
+                idx.arenal_id, self.arenal_id
+            );
         }
         let entry = &mut self.entries[idx.offset as usize];
         let Entry::Occupied(Occupied { value, generation }) = entry else {
             panic!("not occupied");
         };
         if idx.generation != *generation {
-            panic!("wrong generation in index: {} != {}", idx.generation, generation);
+            panic!(
+                "wrong generation in index: {} != {}",
+                idx.generation, generation
+            );
         }
         value
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {
@@ -125,7 +141,6 @@ mod tests {
         assert_eq!(std::mem::size_of::<Entry<()>>(), 2);
         assert_eq!(std::mem::size_of::<Entry<u32>>(), 8);
     }
-
 
     #[test]
     fn test_insert() {

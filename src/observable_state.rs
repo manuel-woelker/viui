@@ -1,5 +1,5 @@
-use std::marker::PhantomData;
 use bevy_reflect::{GetPath, ParsedPath, Reflect};
+use std::marker::PhantomData;
 
 pub struct ObservableState {
     value: Box<dyn Reflect>,
@@ -8,7 +8,10 @@ pub struct ObservableState {
 
 impl ObservableState {
     pub fn new<T: Reflect>(value: T) -> Self {
-        Self { value: Box::new(value), changes: Vec::new() }
+        Self {
+            value: Box::new(value),
+            changes: Vec::new(),
+        }
     }
 
     pub fn state(&self) -> &dyn Reflect {
@@ -19,11 +22,10 @@ impl ObservableState {
         self.value.path(&path.path).unwrap()
     }
 
-
     pub fn apply_change(&mut self, label: impl Into<String>, mutation: impl Fn(&mut Mutator)) {
         let mut mutator = Mutator {
             label: label.into(),
-            state: self
+            state: self,
         };
         mutation(&mut mutator);
     }
@@ -45,13 +47,16 @@ pub struct TypedPath<T: Reflect> {
     path: ParsedPath,
     marker: PhantomData<T>,
 }
-impl <T: Reflect> TypedPath<T> {
+impl<T: Reflect> TypedPath<T> {
     pub fn new(path: ParsedPath) -> Self {
-        Self { path, marker: PhantomData }
+        Self {
+            path,
+            marker: PhantomData,
+        }
     }
 }
 
-impl <'a> Mutator<'a> {
+impl<'a> Mutator<'a> {
     pub fn mutate<V: Reflect>(&mut self, path: &TypedPath<V>, f: impl Fn(&mut V)) {
         let t = self.state.value.path_mut::<V>(&path.path).unwrap();
         let old_value = t.clone_value();
@@ -78,8 +83,8 @@ pub struct Change {
 
 #[cfg(test)]
 mod tests {
-    use bevy_reflect::{GetPath, ParsedPath, Reflect};
     use crate::observable_state::{ObservableState, TypedPath};
+    use bevy_reflect::{GetPath, ParsedPath, Reflect};
 
     #[derive(Debug, Reflect)]
     struct AppState {
@@ -95,7 +100,7 @@ mod tests {
         let counter_path = &TypedPath::<i32>::new(ParsedPath::parse("counter").unwrap());
         assert_eq!(19, *state.state().path("counter").unwrap());
         state.apply_change("Increment counter", |mutator| {
-            mutator.mutate(counter_path,|counter| *counter+=1);
+            mutator.mutate(counter_path, |counter| *counter += 1);
         });
         assert_eq!(20, *state.state().path("counter").unwrap());
         dbg!(&state.changes);

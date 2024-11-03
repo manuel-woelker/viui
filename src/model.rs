@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use serde::Deserialize;
+use std::collections::HashMap;
 
 #[derive(Debug, Deserialize)]
 pub struct ComponentNode {
@@ -13,7 +13,7 @@ pub struct Node {
     #[serde(default)]
     pub children: Vec<Node>,
     #[serde(default)]
-    pub props: HashMap<String,String>,
+    pub props: HashMap<String, String>,
     #[serde(default)]
-    pub events: HashMap<String,String>,
+    pub events: HashMap<String, String>,
 }

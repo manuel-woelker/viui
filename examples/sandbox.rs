@@ -1,6 +1,5 @@
 use bevy_reflect::{ParsedPath, Reflect};
 use log::{error, info};
-use tracing::Level;
 use viui::logging::init_logging;
 use viui::observable_state::{ObservableState, TypedPath};
 use viui::render::backend_femtovg::FemtovgRenderBackend;
@@ -19,7 +18,6 @@ enum AppMessage {
     Decrement,
 }
 
-
 fn main() {
     if let Err(error) = main_internal() {
         error!("Aborted with error: {:?}", error);
@@ -34,20 +32,21 @@ fn main_internal() -> ViuiResult<()> {
     let counter_path = TypedPath::<i32>::new(ParsedPath::parse("counter")?);
     let mut widget_registry = WidgetRegistry::new();
     widget_registry.register_widget::<ButtonWidget>(vec!["click".to_string()]);
-    let mut ui = UI::new(app_state, move |app_state, message: &AppMessage| {
-        match message {
+    let mut ui = UI::new(
+        app_state,
+        move |app_state, message: &AppMessage| match message {
             AppMessage::Increment => {
-                app_state.apply_change("Increment",  |mutator| {
+                app_state.apply_change("Increment", |mutator| {
                     mutator.mutate(&counter_path, |counter| *counter += 1);
                 });
             }
             AppMessage::Decrement => {
-                app_state.apply_change("Decrement",  |mutator| {
+                app_state.apply_change("Decrement", |mutator| {
                     mutator.mutate(&counter_path, |counter| *counter -= 1);
                 });
             }
-        }
-    })?;
+        },
+    )?;
     ui.register_widget::<ButtonWidget>();
     ui.set_root_node_file("counter.viui.yaml")?;
     let render_backend = FemtovgRenderBackend::new(ui.add_render_backend()?, ui.event_sender());
@@ -55,4 +54,3 @@ fn main_internal() -> ViuiResult<()> {
     info!("VIUI started");
     render_backend.start();
 }
-

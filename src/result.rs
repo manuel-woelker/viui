@@ -1,6 +1,6 @@
+use error_stack::Report;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
-use error_stack::Report;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ViuiErrorKind {
@@ -20,7 +20,10 @@ impl Display for ViuiError {
 impl ViuiError {
     #[track_caller]
     pub fn change_context<S: Into<String>>(self, message: S) -> Self {
-        Self(self.0.change_context(ViuiErrorKind::General(message.into())))
+        Self(
+            self.0
+                .change_context(ViuiErrorKind::General(message.into())),
+        )
     }
 }
 
@@ -33,8 +36,11 @@ impl ViuiError {
 
 pub type ViuiResult<T> = Result<T, ViuiError>;
 
-
-impl <T> From<T> for ViuiError where for<'a> &'a T: Into<ViuiErrorKind>, T: Error + Send + Sync + 'static {
+impl<T> From<T> for ViuiError
+where
+    for<'a> &'a T: Into<ViuiErrorKind>,
+    T: Error + Send + Sync + 'static,
+{
     #[track_caller]
     fn from(error: T) -> Self {
         let kind: ViuiErrorKind = (&error).into();
@@ -92,7 +98,6 @@ impl From<String> for ViuiErrorKind {
     }
 }
 
-
 impl From<&str> for ViuiError {
     #[track_caller]
     fn from(error: &str) -> Self {
@@ -106,7 +111,6 @@ macro_rules! bail {
         return Err(ViuiError::new(ViuiErrorKind::General(format!($($args)+).into())));
     };
 }
-
 
 #[macro_export]
 macro_rules! err {
@@ -125,7 +129,6 @@ macro_rules! context {
 }
 pub use context;
 
-
 #[cfg(test)]
 mod tests {
     use crate::result::ViuiResult;
@@ -135,22 +138,26 @@ mod tests {
         let _result = (|| -> ViuiResult<u32> {
             return context!("grok stuff for {}", "bar" => {
                 Ok(0)
-            })
-        })().unwrap();
+            });
+        })()
+        .unwrap();
     }
 
     #[test]
     fn test_context_macro_err() {
-        fn my_broken_function()-> ViuiResult<u32> {
+        fn my_broken_function() -> ViuiResult<u32> {
             Err("ungrokkable")?
         }
         let result = (|| -> ViuiResult<u32> {
             return context!("grok stuff for {}", "bar" => {
                 Ok(my_broken_function()?)
-            })
-        })().expect_err("Should have errored, but was");
-        assert_eq!("General Error: Failed to grok stuff for bar", result.to_string());
+            });
+        })()
+        .expect_err("Should have errored, but was");
+        assert_eq!(
+            "General Error: Failed to grok stuff for bar",
+            result.to_string()
+        );
         assert!(format!("{:?}", result).contains("my_broken_function"));
     }
-
 }

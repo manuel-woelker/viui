@@ -1,3 +1,1 @@
-
-pub trait RenderBackend {
-}
+pub trait RenderBackend {}
