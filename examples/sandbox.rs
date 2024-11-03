@@ -1,7 +1,6 @@
 use bevy_reflect::{ParsedPath, Reflect};
 use log::{error, info};
 use viui::logging::init_logging;
-use viui::nodes::elements::button::ButtonElement;
 use viui::observable_state::{ObservableState, TypedPath};
 use viui::render::backend_femtovg::FemtovgRenderBackend;
 use viui::result::ViuiResult;
@@ -45,7 +44,6 @@ fn main_internal() -> ViuiResult<()> {
             }
         },
     )?;
-    ui.register_node::<ButtonElement>();
     ui.set_root_node_file("counter.viui.yaml")?;
     let render_backend = FemtovgRenderBackend::new(ui.add_render_backend()?, ui.event_sender());
     ui.start()?;

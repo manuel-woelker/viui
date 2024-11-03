@@ -1,7 +1,9 @@
 use crate::arenal::{Arenal, Idx};
 use crate::model::{ComponentNode, Text, TextPart};
 use crate::nodes::data::{LayoutInfo, NodeData, PropExpression};
+use crate::nodes::elements::button::ButtonElement;
 use crate::nodes::elements::kind::Element;
+use crate::nodes::elements::label::LabelElement;
 use crate::nodes::events::NodeEvent;
 use crate::nodes::registry::NodeRegistry;
 use crate::observable_state::ObservableState;
@@ -24,71 +26,6 @@ use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
 use UiEventKind::MouseMoved;
-/*
-pub type StateBox = Box<dyn WidgetState>;
-pub type PropsBox = Box<dyn WidgetProps>;
-
-#[derive(Clone, Debug, Default)]
-pub struct LayoutInfo {
-    bounds: Rect,
-}
-
-pub struct NodeData {
-    kind_index: usize,
-    layout: LayoutInfo,
-    state: StateBox,
-    props: PropsBox,
-    prop_expressions: Vec<PropExpression>,
-    event_mappings: HashMap<String, Box<dyn Reflect>>,
-}
-
-pub struct PropExpression {
-    pub field_name: String,
-    pub text: Text,
-}
-
-impl NodeData {
-    pub fn cast_state_mut_and_props<S: 'static, P: 'static>(&mut self) -> ViuiResult<(&mut S, &P)> {
-        let state = self
-            .state
-            .as_any_mut()
-            .downcast_mut::<S>()
-            .ok_or_else(|| err!("Could not cast state to actual type {}", type_name::<S>()))?;
-        let props = self
-            .props
-            .as_any()
-            .downcast_ref::<P>()
-            .ok_or_else(|| err!("Could not cast props to actual type {}", type_name::<P>()))?;
-        Ok((state, props))
-    }
-
-    pub fn cast_state_and_props<S: 'static, P: 'static>(&self) -> ViuiResult<(&S, &P)> {
-        let state = self
-            .state
-            .as_any()
-            .downcast_ref::<S>()
-            .ok_or_else(|| err!("Could not cast state to actual type {}", type_name::<S>()))?;
-        let props = self
-            .props
-            .as_any()
-            .downcast_ref::<P>()
-            .ok_or_else(|| err!("Could not cast props to actual type {}", type_name::<P>()))?;
-        Ok((state, props))
-    }
-
-    pub fn set_bounds(&mut self, bounds: Rect) {
-        self.layout.bounds = bounds;
-    }
-
-    pub fn bounds(&self) -> &Rect {
-        &self.layout.bounds
-    }
-
-    pub fn kind_index(&self) -> usize {
-        self.kind_index
-    }
-}
-*/
 
 pub type ApplicationEventHandler = Box<dyn Fn(&mut ObservableState, &dyn Reflect) + Send>;
 pub type MessageStringToEnumConverter = Box<dyn Fn(&str) -> ViuiResult<Box<dyn Reflect>> + Send>;
@@ -148,8 +85,11 @@ impl UI {
             },
         )?;
 
+        let mut node_registry = NodeRegistry::new();
+        node_registry.register_node::<LabelElement>(vec![]);
+        node_registry.register_node::<ButtonElement>(vec!["click".to_string()]);
         Ok(UI {
-            node_registry: NodeRegistry::new(),
+            node_registry,
             state_arena: Arenal::new(),
             app_state: Box::new(state),
             event_handler: Box::new(move |state, message| {

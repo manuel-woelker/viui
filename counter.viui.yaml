@@ -1,8 +1,8 @@
 name: App
 children:
-#  - kind: vstack
-#    children:
-  - kind: button
+  #  - kind: vstack
+  #    children:
+  - kind: label
     props:
       label: "Counter: ${counter}"
   - kind: button
