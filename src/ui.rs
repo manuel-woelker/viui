@@ -4,7 +4,7 @@ use crate::nodes::data::{LayoutInfo, NodeData, PropExpression};
 use crate::nodes::elements::button::ButtonElement;
 use crate::nodes::elements::kind::Element;
 use crate::nodes::elements::label::LabelElement;
-use crate::nodes::events::NodeEvent;
+use crate::nodes::events::{MouseEventKind, NodeEvent, UiEvent, UiEventKind};
 use crate::nodes::registry::NodeRegistry;
 use crate::observable_state::ObservableState;
 use crate::render::command::RenderCommand;
@@ -25,14 +25,13 @@ use std::ops::IndexMut;
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
-use UiEventKind::MouseMoved;
 
 pub type ApplicationEventHandler = Box<dyn Fn(&mut ObservableState, &dyn Reflect) + Send>;
 pub type MessageStringToEnumConverter = Box<dyn Fn(&str) -> ViuiResult<Box<dyn Reflect>> + Send>;
 
 pub struct UI {
     node_registry: NodeRegistry,
-    state_arena: Arenal<NodeData>,
+    node_arena: Arenal<NodeData>,
     app_state: Box<ObservableState>,
     event_handler: ApplicationEventHandler,
     message_string_to_enum_converter: MessageStringToEnumConverter,
@@ -90,7 +89,7 @@ impl UI {
         node_registry.register_node::<ButtonElement>(vec!["click".to_string()]);
         Ok(UI {
             node_registry,
-            state_arena: Arenal::new(),
+            node_arena: Arenal::new(),
             app_state: Box::new(state),
             event_handler: Box::new(move |state, message| {
                 let typed_message = message.downcast_ref::<MESSAGE>().unwrap();
@@ -165,37 +164,37 @@ impl UI {
         Ok(message_receiver)
     }
 
-    pub fn add_widget(&mut self, kind: &str) -> ViuiResult<Idx<NodeData>> {
-        let widget_descriptor = self.node_registry.get_node_by_name(kind);
-        Ok(self.state_arena.insert(NodeData {
-            kind_index: widget_descriptor.kind_index,
-            state: (widget_descriptor.make_state)()?,
-            props: (widget_descriptor.make_props)()?,
+    pub fn add_node(&mut self, kind: &str) -> ViuiResult<Idx<NodeData>> {
+        let node_descriptor = self.node_registry.get_node_by_name(kind);
+        Ok(self.node_arena.insert(NodeData {
+            kind_index: node_descriptor.kind_index,
+            state: (node_descriptor.make_state)()?,
+            props: (node_descriptor.make_props)()?,
             layout: LayoutInfo::default(),
             prop_expressions: Vec::new(),
             event_mappings: Default::default(),
         }))
     }
 
-    pub fn widgets(&mut self) -> impl Iterator<Item = &mut NodeData> {
-        self.state_arena.entries_mut()
+    pub fn nodes(&mut self) -> impl Iterator<Item = &mut NodeData> {
+        self.node_arena.entries_mut()
     }
 
     pub fn handle_ui_event(&mut self, event: UiEvent) -> ViuiResult<()> {
         match event.kind {
-            MouseMoved(position) => {
+            UiEventKind::MouseMoved(position) => {
                 self.mouse_position = position;
-                for widget in self.state_arena.entries_mut() {
+                for node in self.node_arena.entries_mut() {
                     self.node_registry.handle_event(
-                        widget.kind_index,
+                        node.kind_index,
                         NodeEvent::mouse_out(),
-                        widget,
+                        node,
                     )?;
-                    if widget.layout.bounds.contains(position) {
+                    if node.layout.bounds.contains(position) {
                         self.node_registry.handle_event(
-                            widget.kind_index,
+                            node.kind_index,
                             NodeEvent::mouse_over(),
-                            widget,
+                            node,
                         )?;
                         //                        break;
                     }
@@ -203,23 +202,23 @@ impl UI {
             }
             UiEventKind::MouseInput(input) => {
                 let position = self.mouse_position;
-                for widget in self.state_arena.entries_mut() {
-                    if widget.layout.bounds.contains(position) {
+                for node in self.node_arena.entries_mut() {
+                    if node.layout.bounds.contains(position) {
                         if input.mouse_event_kind == MouseEventKind::Pressed {
                             self.node_registry.handle_event(
-                                widget.kind_index,
+                                node.kind_index,
                                 NodeEvent::mouse_press(),
-                                widget,
+                                node,
                             )?;
-                            // Found clicked widget
-                            if let Some(message) = widget.event_mappings.get("click") {
+                            // Found clicked node
+                            if let Some(message) = node.event_mappings.get("click") {
                                 (self.event_handler)(self.app_state.as_mut(), message.as_ref());
                             }
                         } else if input.mouse_event_kind == MouseEventKind::Released {
                             self.node_registry.handle_event(
-                                widget.kind_index,
+                                node.kind_index,
                                 NodeEvent::mouse_release(),
-                                widget,
+                                node,
                             )?;
                         }
                     }
@@ -235,11 +234,10 @@ impl UI {
     }
 
     pub fn eval_expressions(&mut self) -> ViuiResult<()> {
-        for widget in self.state_arena.entries_mut() {
-            for expression in &widget.prop_expressions {
+        for node in self.node_arena.entries_mut() {
+            for expression in &node.prop_expressions {
                 let string = text_to_string(self.app_state.as_ref(), &expression.text.parts)?;
-                widget
-                    .props
+                node.props
                     .reflect_path_mut(&*expression.field_name)?
                     .apply(&string);
             }
@@ -248,32 +246,31 @@ impl UI {
     }
 
     pub fn perform_layout(&mut self) {
-        let widget_height = 40.0;
-        let widget_width = 200.0;
+        let node_height = 40.0;
+        let node_width = 200.0;
         let mut current_y = 0.0f32;
-        for widget in self.state_arena.entries_mut() {
-            widget.layout.bounds = Rect::new(
+        for node in self.node_arena.entries_mut() {
+            node.layout.bounds = Rect::new(
                 Point::new(0.0, current_y),
-                Size::new(widget_width, widget_height),
+                Size::new(node_width, node_height),
             );
-            current_y += widget_height;
+            current_y += node_height;
         }
     }
 
     pub fn make_render_commands(&self) -> ViuiResult<Vec<RenderCommand>> {
         let mut render_commands: Vec<RenderCommand> = Vec::new();
-        for widget in self.state_arena.entries() {
+        for node in self.node_arena.entries() {
             render_commands.push(RenderCommand::Save);
-            self.node_registry
-                .render_node(&mut render_commands, widget)?;
+            self.node_registry.render_node(&mut render_commands, node)?;
             render_commands.push(RenderCommand::Restore);
             render_commands.push(RenderCommand::Translate { x: 0.0, y: 40.0 })
         }
         Ok(render_commands)
     }
 
-    pub fn set_widget_prop(&mut self, widget_index: &Idx<NodeData>, field_name: &str, text: Text) {
-        self.state_arena[widget_index]
+    pub fn set_node_prop(&mut self, node_index: &Idx<NodeData>, field_name: &str, text: Text) {
+        self.node_arena[node_index]
             .prop_expressions
             .push(PropExpression {
                 field_name: field_name.to_string(),
@@ -283,23 +280,23 @@ impl UI {
 
     pub fn set_event_mapping<T: Reflect>(
         &mut self,
-        widget_index: &Idx<NodeData>,
+        node_index: &Idx<NodeData>,
         event: &str,
         message: T,
     ) {
-        self.state_arena
-            .index_mut(widget_index)
+        self.node_arena
+            .index_mut(node_index)
             .event_mappings
             .insert(event.to_string(), Box::new(message));
     }
     pub fn set_event_mapping_boxed(
         &mut self,
-        widget_index: &Idx<NodeData>,
+        node_index: &Idx<NodeData>,
         event: &str,
         message: Box<dyn Reflect>,
     ) {
-        self.state_arena
-            .index_mut(widget_index)
+        self.node_arena
+            .index_mut(node_index)
             .event_mappings
             .insert(event.to_string(), message);
     }
@@ -325,15 +322,15 @@ impl UI {
     }
 
     pub fn set_root_node(&mut self, root: ComponentNode) -> ViuiResult<()> {
-        self.state_arena.clear();
+        self.node_arena.clear();
         for child in root.children {
-            let widget_idx = self.add_widget(&child.kind)?;
+            let node_idx = self.add_node(&child.kind)?;
             for (prop, expression) in child.props {
-                self.set_widget_prop(&widget_idx, &prop, expression_to_text(&expression)?);
+                self.set_node_prop(&node_idx, &prop, expression_to_text(&expression)?);
             }
             for (event_name, message_name) in child.events {
                 self.set_event_mapping_boxed(
-                    &widget_idx,
+                    &node_idx,
                     &event_name,
                     (self.message_string_to_enum_converter)(&message_name)?,
                 );
@@ -387,79 +384,4 @@ fn text_to_string(app_state: &ObservableState, text: &Vec<TextPart>) -> ViuiResu
         }
     }
     Ok(string)
-}
-
-#[derive(Debug)]
-pub struct WidgetEvent {
-    kind: WidgetEventKind,
-}
-
-#[derive(Debug)]
-pub enum WidgetEventKind {
-    MouseOver,
-    MouseOut,
-    MousePress,
-    MouseRelease,
-}
-
-impl WidgetEvent {
-    pub fn mouse_over() -> Self {
-        Self {
-            kind: WidgetEventKind::MouseOver,
-        }
-    }
-    pub fn mouse_out() -> Self {
-        Self {
-            kind: WidgetEventKind::MouseOut,
-        }
-    }
-    pub fn mouse_press() -> Self {
-        Self {
-            kind: WidgetEventKind::MousePress,
-        }
-    }
-    pub fn mouse_release() -> Self {
-        Self {
-            kind: WidgetEventKind::MouseRelease,
-        }
-    }
-
-    pub fn kind(&self) -> &WidgetEventKind {
-        &self.kind
-    }
-}
-
-#[derive(Debug)]
-pub struct UiEvent {
-    kind: UiEventKind,
-}
-
-#[derive(Debug)]
-pub enum UiEventKind {
-    MouseMoved(Point),
-    MouseInput(MouseInput),
-}
-
-#[derive(Debug)]
-pub struct MouseInput {
-    pub mouse_event_kind: MouseEventKind,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum MouseEventKind {
-    Pressed,
-    Released,
-}
-
-impl UiEvent {
-    pub fn mouse_move(position: Point) -> Self {
-        Self {
-            kind: MouseMoved(position),
-        }
-    }
-    pub fn mouse_input(mouse_event_kind: MouseEventKind) -> Self {
-        Self {
-            kind: UiEventKind::MouseInput(MouseInput { mouse_event_kind }),
-        }
-    }
 }

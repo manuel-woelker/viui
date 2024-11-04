@@ -1,6 +1,7 @@
+use crate::nodes::events::{MouseEventKind, UiEvent};
 use crate::render::command::RenderCommand;
 use crate::types::Point;
-use crate::ui::{MouseEventKind, RenderBackendMessage, UiEvent};
+use crate::ui::RenderBackendMessage;
 use crossbeam_channel::{Receiver, Sender};
 use femtovg::renderer::OpenGl;
 use femtovg::{Baseline, Canvas, Color, Paint, Path, Renderer};

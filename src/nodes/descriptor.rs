@@ -11,7 +11,7 @@ pub struct NodeDescriptor {
     pub make_props: Box<dyn Fn() -> ViuiResult<Box<dyn NodeProps>> + Send>,
     pub event_handler: NodeEventHandler,
     pub render_fn: NodeRenderFn,
-    // events this widget may emit
+    // events this node may emit
     #[allow(dead_code)]
     pub(crate) emitted_events: EventList,
 }

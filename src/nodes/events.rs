@@ -42,8 +42,7 @@ impl NodeEvent {
 
 #[derive(Debug)]
 pub struct UiEvent {
-    #[allow(dead_code)]
-    kind: UiEventKind,
+    pub kind: UiEventKind,
 }
 
 #[derive(Debug)]
