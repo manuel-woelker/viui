@@ -1,6 +1,6 @@
 use crate::nodes::data::NodeData;
 use crate::nodes::descriptor::NodeDescriptor;
-use crate::nodes::elements::kind::Element;
+use crate::nodes::elements::kind::{Element, EventTrigger};
 use crate::nodes::events::NodeEvent;
 use crate::nodes::types::{EventList, NodeEventHandler, NodeProps, NodeRenderFn, NodeState};
 use crate::render::command::RenderCommand;
@@ -31,7 +31,9 @@ impl NodeRegistry {
         name: impl Into<String>,
         make_state: impl Fn() -> ViuiResult<Box<dyn NodeState>> + Send + 'static,
         make_props: impl Fn() -> ViuiResult<Box<dyn NodeProps>> + Send + 'static,
-        event_handler: impl Fn(NodeEvent, &mut NodeData) -> ViuiResult<()> + Send + 'static,
+        event_handler: impl Fn(NodeEvent, &mut NodeData, &mut EventTrigger) -> ViuiResult<()>
+            + Send
+            + 'static,
         render_fn: impl Fn(&mut Vec<RenderCommand>, &NodeData) -> ViuiResult<()> + Send + 'static,
         emitted_events: EventList,
     ) {
@@ -71,11 +73,14 @@ impl NodeRegistry {
             T::NAME,
             || Ok(Box::new(T::State::default())),
             || Ok(Box::new(T::Props::default())),
-            Box::new(|event: NodeEvent, node_data: &mut NodeData| {
-                let (state, props) = node_data.cast_state_mut_and_props::<T::State, T::Props>()?;
-                T::handle_event(&event, state, props);
-                Ok(())
-            }),
+            Box::new(
+                |event: NodeEvent, node_data: &mut NodeData, event_trigger: &mut EventTrigger| {
+                    let (state, props) =
+                        node_data.cast_state_mut_and_props::<T::State, T::Props>()?;
+                    T::handle_event(&event, state, props, event_trigger);
+                    Ok(())
+                },
+            ),
             Box::new(
                 |render_queue: &mut Vec<RenderCommand>, node_data: &NodeData| {
                     let (state, props) = node_data.cast_state_and_props::<T::State, T::Props>()?;
@@ -100,8 +105,9 @@ impl NodeRegistry {
         node_index: usize,
         event: NodeEvent,
         node_data: &mut NodeData,
+        event_trigger: &mut EventTrigger,
     ) -> ViuiResult<()> {
-        (self.nodes[node_index].event_handler)(event, node_data)
+        (self.nodes[node_index].event_handler)(event, node_data, event_trigger)
     }
 
     pub fn get_node_index(&self, kind: &str) -> usize {

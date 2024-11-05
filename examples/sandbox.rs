@@ -1,20 +1,24 @@
 use bevy_reflect::{ParsedPath, Reflect};
 use log::{error, info};
+use serde::{Deserialize, Serialize};
 use viui::logging::init_logging;
 use viui::observable_state::{ObservableState, TypedPath};
 use viui::render::backend_femtovg::FemtovgRenderBackend;
 use viui::result::ViuiResult;
+use viui::types::Float;
 use viui::ui::UI;
 
 #[derive(Debug, Reflect)]
 struct AppState {
     counter: i32,
+    gain: Float,
 }
 
-#[derive(Debug, Reflect)]
+#[derive(Debug, Reflect, Serialize, Deserialize)]
 enum AppMessage {
     Increment,
     Decrement,
+    Set(Float),
 }
 
 fn main() {
@@ -27,8 +31,12 @@ fn main_internal() -> ViuiResult<()> {
     init_logging()?;
     info!("VIUI Sandbox starting");
 
-    let app_state = ObservableState::new(AppState { counter: 3 });
+    let app_state = ObservableState::new(AppState {
+        counter: 3,
+        gain: 3.0,
+    });
     let counter_path = TypedPath::<i32>::new(ParsedPath::parse("counter")?);
+    let gain_path = TypedPath::<Float>::new(ParsedPath::parse("gain")?);
     let mut ui = UI::new(
         app_state,
         move |app_state, message: &AppMessage| match message {
@@ -40,6 +48,11 @@ fn main_internal() -> ViuiResult<()> {
             AppMessage::Decrement => {
                 app_state.apply_change("Decrement", |mutator| {
                     mutator.mutate(&counter_path, |counter| *counter -= 1);
+                });
+            }
+            AppMessage::Set(value) => {
+                app_state.apply_change(format!("Set to {}", value), |mutator| {
+                    mutator.mutate(&gain_path, |gain| *gain = *value);
                 });
             }
         },

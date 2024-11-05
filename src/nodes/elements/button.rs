@@ -1,4 +1,4 @@
-use crate::nodes::elements::kind::Element;
+use crate::nodes::elements::kind::{Element, EventTrigger};
 use crate::nodes::events::{NodeEvent, NodeEventKind};
 use crate::nodes::types::{NodeProps, NodeState};
 use crate::render::command::RenderCommand;
@@ -12,7 +12,12 @@ impl Element for ButtonElement {
     type State = ButtonElementState;
     type Props = ButtonElementProps;
 
-    fn handle_event(event: &NodeEvent, state: &mut Self::State, _props: &Self::Props) {
+    fn handle_event(
+        event: &NodeEvent,
+        state: &mut Self::State,
+        _props: &Self::Props,
+        event_trigger: &mut EventTrigger,
+    ) {
         match event.kind() {
             NodeEventKind::MouseOver => {
                 state.is_hovering = true;
@@ -20,12 +25,14 @@ impl Element for ButtonElement {
             NodeEventKind::MouseOut => {
                 state.is_hovering = false;
             }
-            NodeEventKind::MousePress => {
+            NodeEventKind::MousePress(..) => {
                 state.is_pressed = true;
+                event_trigger("click");
             }
-            NodeEventKind::MouseRelease => {
+            NodeEventKind::MouseRelease(..) => {
                 state.is_pressed = false;
             }
+            _ => {}
         }
     }
 

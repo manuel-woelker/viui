@@ -15,12 +15,22 @@ children:
       label: "-1"
     events:
       click: Decrement
+  - kind: button
+    props:
+      label: "Reset Gain"
+    events:
+      click: Set(0.0)
+  - kind: label
+    props:
+      label: "Gain: ${gain}"
   - kind: knob
     props:
       min_value: 0
       max_value: 10
-      value: "${counter}"
+      value: "${gain}"
       label: "Gain"
+    events:
+      change: Set(${value})
   - kind: knob
     props:
       min_value: 0

@@ -3,7 +3,6 @@ use crate::model::Text;
 use crate::nodes::types::{PropsBox, StateBox};
 use crate::result::ViuiResult;
 use crate::types::Rect;
-use bevy_reflect::Reflect;
 use std::any::type_name;
 use std::collections::HashMap;
 
@@ -13,7 +12,7 @@ pub struct NodeData {
     pub state: StateBox,
     pub props: PropsBox,
     pub prop_expressions: Vec<PropExpression>,
-    pub event_mappings: HashMap<String, Box<dyn Reflect>>,
+    pub event_mappings: HashMap<String, String>,
 }
 
 #[derive(Clone, Debug, Default)]

@@ -1,8 +1,8 @@
-use crate::nodes::elements::kind::Element;
+use crate::nodes::elements::kind::{Element, EventTrigger};
 use crate::nodes::events::{NodeEvent, NodeEventKind};
 use crate::nodes::types::{NodeProps, NodeState};
 use crate::render::command::RenderCommand;
-use crate::types::{Color, Point, Rect, Size};
+use crate::types::{Color, Float, Point, Rect, Size};
 use bevy_reflect::Reflect;
 use std::f32::consts::PI;
 
@@ -13,7 +13,12 @@ impl Element for KnobElement {
     type State = KnobElementState;
     type Props = KnobElementProps;
 
-    fn handle_event(event: &NodeEvent, state: &mut Self::State, _props: &Self::Props) {
+    fn handle_event(
+        event: &NodeEvent,
+        state: &mut Self::State,
+        props: &Self::Props,
+        event_trigger: &mut EventTrigger,
+    ) {
         match event.kind() {
             NodeEventKind::MouseOver => {
                 state.is_hovering = true;
@@ -21,11 +26,27 @@ impl Element for KnobElement {
             NodeEventKind::MouseOut => {
                 state.is_hovering = false;
             }
-            NodeEventKind::MousePress => {
+            NodeEventKind::MousePress(position) => {
+                state.drag_start_x = position.x;
+                state.drag_start_y = position.y;
+                state.drag_start_value = props.value;
                 state.is_pressed = true;
+                state.is_dragging = true;
             }
-            NodeEventKind::MouseRelease => {
+            NodeEventKind::MouseRelease(..) => {
                 state.is_pressed = false;
+                state.is_dragging = false;
+            }
+            NodeEventKind::MouseMove(position) => {
+                //dbg!(position);
+                if state.is_dragging {
+                    let delta_x = position.x - state.drag_start_x;
+                    let delta_y = position.y - state.drag_start_y;
+                    let delta = (delta_x - delta_y) / 10.0;
+                    let new_value = state.drag_start_value + delta;
+                    let new_value = new_value.clamp(props.min_value, props.max_value);
+                    event_trigger(&format!("change:{}", new_value));
+                }
             }
         }
     }
@@ -99,6 +120,10 @@ impl NodeProps for KnobElementProps {}
 pub struct KnobElementState {
     pub is_hovering: bool,
     pub is_pressed: bool,
+    pub is_dragging: bool,
+    pub drag_start_x: Float,
+    pub drag_start_y: Float,
+    pub drag_start_value: Float,
 }
 
 impl NodeState for KnobElementState {}

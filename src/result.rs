@@ -1,4 +1,5 @@
 use error_stack::Report;
+use ron::de::SpannedError;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::num::ParseFloatError;
@@ -103,6 +104,13 @@ impl From<&ParseFloatError> for ViuiErrorKind {
     #[track_caller]
     fn from(error: &ParseFloatError) -> Self {
         Self::General(format!("Failed to parse float value: {}", error))
+    }
+}
+
+impl From<&SpannedError> for ViuiErrorKind {
+    #[track_caller]
+    fn from(error: &SpannedError) -> Self {
+        Self::General(format!("RON Error: {}", error))
     }
 }
 

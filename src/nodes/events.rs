@@ -9,8 +9,9 @@ pub struct NodeEvent {
 pub enum NodeEventKind {
     MouseOver,
     MouseOut,
-    MousePress,
-    MouseRelease,
+    MouseMove(Point),
+    MousePress(Point),
+    MouseRelease(Point),
 }
 
 impl NodeEvent {
@@ -24,14 +25,20 @@ impl NodeEvent {
             kind: NodeEventKind::MouseOut,
         }
     }
-    pub fn mouse_press() -> Self {
+    pub fn mouse_press(position: Point) -> Self {
         Self {
-            kind: NodeEventKind::MousePress,
+            kind: NodeEventKind::MousePress(position),
         }
     }
-    pub fn mouse_release() -> Self {
+    pub fn mouse_release(position: Point) -> Self {
         Self {
-            kind: NodeEventKind::MouseRelease,
+            kind: NodeEventKind::MouseRelease(position),
+        }
+    }
+
+    pub fn mouse_move(position: Point) -> Self {
+        Self {
+            kind: NodeEventKind::MouseMove(position),
         }
     }
 

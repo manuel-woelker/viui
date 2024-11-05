@@ -1,5 +1,5 @@
 use crate::arenal::{Arenal, Idx};
-use crate::err;
+use crate::bail;
 use crate::model::{ComponentNode, Text, TextPart};
 use crate::nodes::data::{LayoutInfo, NodeData, PropExpression};
 use crate::nodes::elements::button::ButtonElement;
@@ -13,12 +13,12 @@ use crate::render::command::RenderCommand;
 use crate::result::{context, ViuiResult};
 use crate::types::{Point, Rect, Size};
 use crate::util::parse_expression_to_text;
-use bevy_reflect::{DynamicEnum, DynamicVariant, FromReflect, GetPath, Reflect};
+use bevy_reflect::{FromReflect, GetPath, Reflect};
 use crossbeam_channel::{select, Receiver, Sender};
 use log::debug;
 use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
-use std::any::type_name;
+use serde::de::DeserializeOwned;
 use std::fmt::Debug;
 use std::fs::File;
 use std::mem::take;
@@ -44,6 +44,7 @@ pub struct UI {
     file_change_receiver: Receiver<()>,
     file_watcher: Debouncer<RecommendedWatcher>,
     root_node_file: PathBuf,
+    active_node: Option<Idx<NodeData>>,
 }
 
 struct RenderBackend {
@@ -55,7 +56,7 @@ pub struct RenderBackendMessage {
 }
 
 impl UI {
-    pub fn new<MESSAGE: Reflect + FromReflect + Debug + Sized>(
+    pub fn new<'a, MESSAGE: DeserializeOwned + Reflect + FromReflect + Debug + Sized>(
         state: ObservableState,
         event_handler: impl Fn(&mut ObservableState, &MESSAGE) + Send + 'static,
     ) -> ViuiResult<UI> {
@@ -63,15 +64,7 @@ impl UI {
         let (file_change_sender, file_change_receiver) = crossbeam_channel::bounded::<()>(4);
         let message_string_to_enum_converter =
             Box::new(|message_string: &str| -> ViuiResult<Box<dyn Reflect>> {
-                let dynamic_enum =
-                    DynamicEnum::new(message_string.to_string(), DynamicVariant::Unit);
-                let message = MESSAGE::from_reflect(&dynamic_enum).ok_or_else(|| {
-                    err!(
-                        "Could not create message of type {} from string: '{}'",
-                        type_name::<MESSAGE>(),
-                        message_string
-                    )
-                })?;
+                let message = ron::de::from_str::<MESSAGE>(message_string)?;
                 Ok(Box::new(message))
             });
         let file_watcher = new_debouncer(
@@ -106,6 +99,7 @@ impl UI {
             file_change_receiver,
             file_watcher,
             root_node_file: Default::default(),
+            active_node: Default::default(),
         })
     }
 
@@ -184,56 +178,72 @@ impl UI {
     }
 
     pub fn handle_ui_event(&mut self, event: UiEvent) -> ViuiResult<()> {
+        let mut events_to_trigger = Vec::new();
+        let mut add_event_trigger = |node_idx: Idx<NodeData>, node_event: NodeEvent| {
+            events_to_trigger.push((node_idx, node_event));
+        };
         match event.kind {
             UiEventKind::MouseMoved(position) => {
                 self.mouse_position = position;
-                for node in self.node_arena.entries_mut() {
-                    self.node_registry.handle_event(
-                        node.kind_index,
-                        NodeEvent::mouse_out(),
-                        node,
-                    )?;
+                if let Some(node) = &self.active_node {
+                    add_event_trigger(*node, NodeEvent::mouse_move(position));
+                }
+                for (node, node_idx) in self.node_arena.entries_mut_indexed() {
                     if node.layout.bounds.contains(position) {
-                        self.node_registry.handle_event(
-                            node.kind_index,
-                            NodeEvent::mouse_over(),
-                            node,
-                        )?;
-                        //                        break;
+                        add_event_trigger(node_idx, NodeEvent::mouse_over());
+                    } else {
+                        add_event_trigger(node_idx, NodeEvent::mouse_out());
                     }
                 }
             }
             UiEventKind::MouseInput(input) => {
                 let position = self.mouse_position;
-                for node in self.node_arena.entries_mut() {
+                for (node, idx) in self.node_arena.entries_mut_indexed() {
                     if node.layout.bounds.contains(position) {
+                        self.active_node = Some(idx);
                         if input.mouse_event_kind == MouseEventKind::Pressed {
-                            self.node_registry.handle_event(
-                                node.kind_index,
-                                NodeEvent::mouse_press(),
-                                node,
-                            )?;
-                            // Found clicked node
-                            if let Some(message) = node.event_mappings.get("click") {
-                                (self.event_handler)(self.app_state.as_mut(), message.as_ref());
-                            }
+                            add_event_trigger(idx, NodeEvent::mouse_press(position));
                         } else if input.mouse_event_kind == MouseEventKind::Released {
-                            self.node_registry.handle_event(
-                                node.kind_index,
-                                NodeEvent::mouse_release(),
-                                node,
-                            )?;
+                            add_event_trigger(idx, NodeEvent::mouse_release(position));
                         }
                     }
                 }
             }
         }
+
+        for (node_idx, event) in events_to_trigger {
+            let node = &mut self.node_arena[&node_idx];
+            let mut events = Vec::new();
+            let mut event_trigger = |event: &str| {
+                events.push(event.to_string());
+            };
+            self.node_registry
+                .handle_event(node.kind_index, event, node, &mut event_trigger)?;
+            for event in events {
+                let (event_name, value) = event.split_once(":").unwrap_or((&event, ""));
+                if let Some(message_expression) = node.event_mappings.get(event_name) {
+                    let message_expression = message_expression.replace("${value}", value);
+                    let message = (self.message_string_to_enum_converter)(&message_expression)?;
+                    (self.event_handler)(self.app_state.as_mut(), message.as_ref());
+                } else {
+                    bail!("No event mapping found for event: {}", event);
+                }
+            }
+            /*            // Found clicked node
+            if let Some(message) = node.event_mappings.get(event) {
+                (self.event_handler)(self.app_state.as_mut(), message.as_ref());
+            } else {
+                bail!("No event mapping found for event: {}", event);
+            }*/
+        }
         Ok(())
     }
 
     pub fn register_node<T: Element>(&mut self) {
+        // TODO: fix event registration
+        // TODO: Check if node is already registered
         self.node_registry
-            .register_node::<T>(vec!["click".to_string()]);
+            .register_node::<T>(vec!["click".to_string(), "change".to_string()]);
     }
 
     pub fn eval_expressions(&mut self) -> ViuiResult<()> {
@@ -290,29 +300,12 @@ impl UI {
             });
     }
 
-    pub fn set_event_mapping<T: Reflect>(
-        &mut self,
-        node_index: &Idx<NodeData>,
-        event: &str,
-        message: T,
-    ) {
-        self.node_arena
-            .index_mut(node_index)
-            .event_mappings
-            .insert(event.to_string(), Box::new(message));
-    }
-    pub fn set_event_mapping_boxed(
-        &mut self,
-        node_index: &Idx<NodeData>,
-        event: &str,
-        message: Box<dyn Reflect>,
-    ) {
+    pub fn set_event_mapping(&mut self, node_index: &Idx<NodeData>, event: &str, message: String) {
         self.node_arena
             .index_mut(node_index)
             .event_mappings
             .insert(event.to_string(), message);
     }
-
     pub fn set_root_node_file<P: AsRef<Path>>(&mut self, root_path: P) -> ViuiResult<()> {
         context!("set root context file {:?}", self.root_node_file => {
             self.root_node_file = root_path.as_ref().to_path_buf();
@@ -344,12 +337,8 @@ impl UI {
                     parse_expression_to_text::parse_expression_to_text(&expression)?,
                 );
             }
-            for (event_name, message_name) in child.events {
-                self.set_event_mapping_boxed(
-                    &node_idx,
-                    &event_name,
-                    (self.message_string_to_enum_converter)(&message_name)?,
-                );
+            for (event_name, message_expression) in child.events {
+                self.set_event_mapping(&node_idx, &event_name, message_expression);
             }
         }
         Ok(())

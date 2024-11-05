@@ -1,5 +1,4 @@
 use crate::nodes::elements::kind::Element;
-use crate::nodes::events::NodeEvent;
 use crate::nodes::types::NodeProps;
 use crate::render::command::RenderCommand;
 use bevy_reflect::Reflect;
@@ -10,8 +9,6 @@ impl Element for LabelElement {
     const NAME: &'static str = "label";
     type State = ();
     type Props = LabelElementProps;
-
-    fn handle_event(_event: &NodeEvent, _state: &mut Self::State, _props: &Self::Props) {}
 
     fn render_element(
         render_queue: &mut Vec<RenderCommand>,

@@ -31,6 +31,19 @@ pub struct Idx<T> {
     marker: std::marker::PhantomData<T>,
 }
 
+impl<T> Clone for Idx<T> {
+    fn clone(&self) -> Self {
+        Idx {
+            arenal_id: self.arenal_id,
+            generation: self.generation,
+            offset: self.offset,
+            marker: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<T> Copy for Idx<T> {}
+
 impl<T> Default for Arenal<T> {
     fn default() -> Self {
         Self::new()
@@ -71,6 +84,27 @@ impl<T> Arenal<T> {
                 None
             }
         })
+    }
+
+    pub fn entries_mut_indexed(&mut self) -> impl Iterator<Item = (&mut T, Idx<T>)> {
+        self.entries
+            .iter_mut()
+            .enumerate()
+            .filter_map(|(offset, item)| {
+                if let Entry::Occupied(o) = item {
+                    Some((
+                        &mut o.value,
+                        Idx {
+                            arenal_id: self.arenal_id,
+                            generation: o.generation,
+                            offset: offset as u32,
+                            marker: std::marker::PhantomData,
+                        },
+                    ))
+                } else {
+                    None
+                }
+            })
     }
 
     pub fn entries(&self) -> impl Iterator<Item = &T> {
