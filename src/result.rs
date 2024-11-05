@@ -1,6 +1,7 @@
 use error_stack::Report;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
+use std::num::ParseFloatError;
 
 #[derive(thiserror::Error, Debug)]
 pub enum ViuiErrorKind {
@@ -95,6 +96,13 @@ impl From<String> for ViuiErrorKind {
     #[track_caller]
     fn from(error: String) -> Self {
         Self::General(error)
+    }
+}
+
+impl From<&ParseFloatError> for ViuiErrorKind {
+    #[track_caller]
+    fn from(error: &ParseFloatError) -> Self {
+        Self::General(format!("Failed to parse float value: {}", error))
     }
 }
 

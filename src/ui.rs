@@ -4,6 +4,7 @@ use crate::model::{ComponentNode, Text, TextPart};
 use crate::nodes::data::{LayoutInfo, NodeData, PropExpression};
 use crate::nodes::elements::button::ButtonElement;
 use crate::nodes::elements::kind::Element;
+use crate::nodes::elements::knob::KnobElement;
 use crate::nodes::elements::label::LabelElement;
 use crate::nodes::events::{MouseEventKind, NodeEvent, UiEvent, UiEventKind};
 use crate::nodes::registry::NodeRegistry;
@@ -88,6 +89,7 @@ impl UI {
         let mut node_registry = NodeRegistry::new();
         node_registry.register_node::<LabelElement>(vec![]);
         node_registry.register_node::<ButtonElement>(vec!["click".to_string()]);
+        node_registry.register_node::<KnobElement>(vec!["click".to_string()]);
         Ok(UI {
             node_registry,
             node_arena: Arenal::new(),
@@ -237,17 +239,26 @@ impl UI {
     pub fn eval_expressions(&mut self) -> ViuiResult<()> {
         for node in self.node_arena.entries_mut() {
             for expression in &node.prop_expressions {
+                let prop = node.props.reflect_path_mut(&*expression.field_name)?;
                 let string = text_to_string(self.app_state.as_ref(), &expression.text.parts)?;
-                node.props
-                    .reflect_path_mut(&*expression.field_name)?
-                    .apply(&string);
+                if let Some(prop) = prop.downcast_mut::<f32>() {
+                    *prop = string.parse::<f32>()?;
+                } else if let Some(prop) = prop.downcast_mut::<String>() {
+                    prop.apply(&string);
+                } else {
+                    error!(
+                        "Unsupported property type for {}: {}",
+                        expression.field_name,
+                        prop.reflect_short_type_path()
+                    );
+                }
             }
         }
         Ok(())
     }
 
     pub fn perform_layout(&mut self) {
-        let node_height = 40.0;
+        let node_height = 80.0;
         let node_width = 200.0;
         let mut current_y = 0.0f32;
         for node in self.node_arena.entries_mut() {
@@ -265,7 +276,7 @@ impl UI {
             render_commands.push(RenderCommand::Save);
             self.node_registry.render_node(&mut render_commands, node)?;
             render_commands.push(RenderCommand::Restore);
-            render_commands.push(RenderCommand::Translate { x: 0.0, y: 40.0 })
+            render_commands.push(RenderCommand::Translate { x: 0.0, y: 80.0 })
         }
         Ok(render_commands)
     }

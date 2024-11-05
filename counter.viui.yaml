@@ -15,3 +15,33 @@ children:
       label: "-1"
     events:
       click: Decrement
+  - kind: knob
+    props:
+      min_value: 0
+      max_value: 10
+      value: "${counter}"
+      label: "Gain"
+  - kind: knob
+    props:
+      min_value: 0
+      max_value: 10
+      value: 0
+      label: "Gain 0"
+  - kind: knob
+    props:
+      min_value: 0
+      max_value: 10
+      value: 1
+      label: "Gain 1"
+  - kind: knob
+    props:
+      min_value: 0
+      max_value: 10
+      value: 5
+      label: "Gain 5"
+  - kind: knob
+    props:
+      min_value: 0
+      max_value: 10
+      value: 10
+      label: "Gain 10"

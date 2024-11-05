@@ -27,7 +27,7 @@ fn main_internal() -> ViuiResult<()> {
     init_logging()?;
     info!("VIUI Sandbox starting");
 
-    let app_state = ObservableState::new(AppState { counter: 19 });
+    let app_state = ObservableState::new(AppState { counter: 3 });
     let counter_path = TypedPath::<i32>::new(ParsedPath::parse("counter")?);
     let mut ui = UI::new(
         app_state,

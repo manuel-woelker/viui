@@ -4,7 +4,7 @@ use crate::types::Point;
 use crate::ui::RenderBackendMessage;
 use crossbeam_channel::{Receiver, Sender};
 use femtovg::renderer::OpenGl;
-use femtovg::{Baseline, Canvas, Color, Paint, Path, Renderer};
+use femtovg::{Baseline, Canvas, Color, Paint, Path, Renderer, Solidity};
 use glutin::config::ConfigTemplateBuilder;
 use glutin::context::{
     ContextAttributesBuilder, NotCurrentGlContextSurfaceAccessor, PossiblyCurrentContext,
@@ -217,6 +217,32 @@ fn render<T: Renderer>(
             }
             RenderCommand::SetStrokeColor(color) => {
                 stroke_paint.set_color(Color::rgba(color.r, color.g, color.b, color.a));
+            }
+            RenderCommand::Line { start, end } => {
+                let mut path = Path::new();
+                path.move_to(start.x, start.y);
+                path.line_to(end.x, end.y);
+                canvas.stroke_path(&path, &stroke_paint);
+            }
+            RenderCommand::Arc {
+                center,
+                radius,
+                start_angle,
+                end_angle,
+            } => {
+                let mut path = Path::new();
+                path.arc(
+                    center.x,
+                    center.y,
+                    *radius,
+                    *start_angle,
+                    *end_angle,
+                    Solidity::Hole,
+                );
+                canvas.stroke_path(&path, &stroke_paint);
+            }
+            RenderCommand::SetStrokeWidth(width) => {
+                stroke_paint.set_line_width(*width);
             }
         }
     }
