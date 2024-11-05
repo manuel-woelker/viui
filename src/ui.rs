@@ -1,4 +1,5 @@
 use crate::arenal::{Arenal, Idx};
+use crate::err;
 use crate::model::{ComponentNode, Text, TextPart};
 use crate::nodes::data::{LayoutInfo, NodeData, PropExpression};
 use crate::nodes::elements::button::ButtonElement;
@@ -10,13 +11,12 @@ use crate::observable_state::ObservableState;
 use crate::render::command::RenderCommand;
 use crate::result::{context, ViuiResult};
 use crate::types::{Point, Rect, Size};
-use crate::{bail, err};
+use crate::util::parse_expression_to_text;
 use bevy_reflect::{DynamicEnum, DynamicVariant, FromReflect, GetPath, Reflect};
 use crossbeam_channel::{select, Receiver, Sender};
 use log::debug;
 use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
-use regex_lite::Regex;
 use std::any::type_name;
 use std::fmt::Debug;
 use std::fs::File;
@@ -327,7 +327,11 @@ impl UI {
         for child in root.children {
             let node_idx = self.add_node(&child.kind)?;
             for (prop, expression) in child.props {
-                self.set_node_prop(&node_idx, &prop, expression_to_text(&expression)?);
+                self.set_node_prop(
+                    &node_idx,
+                    &prop,
+                    parse_expression_to_text::parse_expression_to_text(&expression)?,
+                );
             }
             for (event_name, message_name) in child.events {
                 self.set_event_mapping_boxed(
@@ -339,37 +343,6 @@ impl UI {
         }
         Ok(())
     }
-}
-
-fn expression_to_text(original_expression: &str) -> ViuiResult<Text> {
-    let mut parts = vec![];
-    let string_regex = Regex::new(r#"^([^$]+)"#)?;
-    let placeholder_regex = Regex::new(r#"^\$\{([^}]+)}"#)?;
-    let mut matched = true;
-    let mut expression = original_expression;
-    while !expression.is_empty() {
-        if !matched {
-            bail!(
-                "Failed to parse placeholder expression: '{}' at '{}'",
-                original_expression,
-                expression
-            );
-        }
-        matched = false;
-        if let Some(found) = string_regex.find(expression) {
-            parts.push(TextPart::FixedText(found.as_str().to_string()));
-            expression = &expression[found.end()..];
-            matched = true;
-        }
-        if let Some(found) = placeholder_regex.find(expression) {
-            parts.push(TextPart::VariableText(
-                expression[found.start() + 2..found.end() - 1].to_string(),
-            ));
-            expression = &expression[found.end()..];
-            matched = true;
-        }
-    }
-    Ok(Text { parts })
 }
 
 fn text_to_string(app_state: &ObservableState, text: &Vec<TextPart>) -> ViuiResult<String> {

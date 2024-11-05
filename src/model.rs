@@ -24,7 +24,7 @@ pub struct Text {
     pub parts: Vec<TextPart>,
 }
 
-#[derive(Reflect, Debug)]
+#[derive(Reflect, Debug, Eq, PartialEq, Hash)]
 pub enum TextPart {
     FixedText(String),
     VariableText(String),
