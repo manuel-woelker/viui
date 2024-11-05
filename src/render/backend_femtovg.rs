@@ -17,6 +17,7 @@ use raw_window_handle::HasRawWindowHandle;
 use std::fs::File;
 use std::num::NonZeroU32;
 use std::thread;
+use tracing::error;
 use winit::dpi::PhysicalSize;
 use winit::event::{ElementState, Event, MouseButton, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop, EventLoopBuilder};
@@ -46,10 +47,10 @@ impl FemtovgRenderBackend {
             .spawn(move || loop {
                 if let Ok(message) = self.message_receiver.recv() {
                     if let Err(err) = event_loop_proxy.send_event(message) {
-                        println!("Event loop closed: {}", err);
+                        error!("Event loop closed: {}", err);
                     }
                 } else {
-                    println!("Could not receive message");
+                    error!("Could not receive message");
                 }
             })
             .unwrap();
@@ -70,35 +71,26 @@ impl FemtovgRenderBackend {
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::CursorMoved { position, .. } => {
                         let mouse_position = Point::new(position.x as f32, position.y as f32);
-                        // TODO
                         self.event_sender
                             .send(UiEvent::mouse_move(mouse_position))
                             .unwrap()
-                        //                        ui.handle_ui_event(UiEvent::mouse_move(mouse_position));
-                        //                        self.
-                        //                        window.request_redraw();
                     }
                     WindowEvent::MouseInput {
                         state,
                         button: MouseButton::Left,
                         ..
-                    } => {
-                        // TODO
-                        self.event_sender
-                            .send(UiEvent::mouse_input(if state == ElementState::Pressed {
-                                MouseEventKind::Pressed
-                            } else {
-                                MouseEventKind::Released
-                            }))
-                            .unwrap()
-                        //                        ui.handle_ui_event(UiEvent::mouse_input(if state == ElementState::Pressed { MouseEventKind::Pressed} else { MouseEventKind::Released }));
-                        //                        window.request_redraw();
-                    }
+                    } => self
+                        .event_sender
+                        .send(UiEvent::mouse_input(if state == ElementState::Pressed {
+                            MouseEventKind::Pressed
+                        } else {
+                            MouseEventKind::Released
+                        }))
+                        .unwrap(),
                     WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
                     _ => {}
                 },
                 Event::RedrawRequested(_) => {
-                    // TODO
                     render(&context, &surface, &window, &mut canvas, &render_list);
                 }
                 Event::UserEvent(message) => {
@@ -176,16 +168,10 @@ fn render<T: Renderer>(
     canvas: &mut Canvas<T>,
     render_commands: &[RenderCommand],
 ) {
-    //    ui.eval_expressions();
-    //    ui.perform_layout();
-    //    let render_commands = ui.make_render_commands();
-
     let size = window.inner_size();
     canvas.set_size(size.width, size.height, window.scale_factor() as f32);
     canvas.reset_transform();
     canvas.clear_rect(0, 0, size.width, size.height, Color::white());
-
-    //    FemtovgRenderer::new(canvas).render(&render_commands);
 
     let mut fill_paint = Paint::color(Color::hsl(0.0, 0.0, 1.0))
         .with_text_baseline(Baseline::Middle)

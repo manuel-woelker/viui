@@ -25,6 +25,7 @@ use std::ops::IndexMut;
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
+use tracing::error;
 
 pub type ApplicationEventHandler = Box<dyn Fn(&mut ObservableState, &dyn Reflect) + Send>;
 pub type MessageStringToEnumConverter = Box<dyn Fn(&str) -> ViuiResult<Box<dyn Reflect>> + Send>;
@@ -77,10 +78,10 @@ impl UI {
             move |res: DebounceEventResult| match res {
                 Ok(_events) => {
                     if let Err(err) = file_change_sender.send(()) {
-                        println!("File watcher error {:?}", err)
+                        error!("File watcher error {:?}", err)
                     }
                 }
-                Err(err) => println!("File watcher error {:?}", err),
+                Err(err) => error!("File watcher error {:?}", err),
             },
         )?;
 
@@ -127,7 +128,7 @@ impl UI {
                         Ok(())
                     })();
                     if let Err(err) = result {
-                        println!("Error in VIUI Thread: {:?}", err);
+                        error!("Error in VIUI Thread: {:?}", err);
                         std::process::exit(1);
                     }
                 }
