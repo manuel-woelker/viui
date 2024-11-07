@@ -19,6 +19,11 @@ pub type ExpressionAst = AstNode<ExpressionKind>;
 #[derive(Debug)]
 pub enum ExpressionKind {
     Literal(ExpressionValue),
+    VarUse(String),
+    StringTemplate {
+        strings: Vec<String>,
+        expressions: Vec<ExpressionAst>,
+    },
     //    Concatenation(Vec<AstNode>),
 }
 
@@ -29,5 +34,21 @@ pub fn print_expression_ast(ast: &ExpressionAst) -> String {
 pub fn expression_ast_to_tree(ast: &ExpressionAst) -> Tree<String> {
     match &ast.data {
         ExpressionKind::Literal(value) => Tree::root(format!("Literal {:?}", value)),
+        ExpressionKind::StringTemplate {
+            strings,
+            expressions,
+        } => {
+            let mut tree = Tree::root("StringTemplate".to_string());
+            for (string, expression) in strings.iter().zip(expressions.iter()) {
+                tree.push(Tree::root(format!("String {}", string)));
+                tree.push(expression_ast_to_tree(expression));
+            }
+            tree.push(Tree::root(format!(
+                "String {}",
+                strings.iter().last().unwrap()
+            )));
+            tree
+        }
+        ExpressionKind::VarUse(name) => Tree::root(format!("VarUse {}", name)),
     }
 }
