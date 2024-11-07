@@ -1,0 +1,33 @@
+use crate::expression::span::Span;
+use crate::expression::value::ExpressionValue;
+use treeline::Tree;
+
+#[derive(Debug)]
+pub struct AstNode<T> {
+    span: Span,
+    data: T,
+}
+
+impl<T> AstNode<T> {
+    pub fn new(span: Span, data: T) -> Self {
+        Self { span, data }
+    }
+}
+
+pub type ExpressionAst = AstNode<ExpressionKind>;
+
+#[derive(Debug)]
+pub enum ExpressionKind {
+    Literal(ExpressionValue),
+    //    Concatenation(Vec<AstNode>),
+}
+
+pub fn print_expression_ast(ast: &ExpressionAst) -> String {
+    format!("{}", expression_ast_to_tree(ast))
+}
+
+pub fn expression_ast_to_tree(ast: &ExpressionAst) -> Tree<String> {
+    match &ast.data {
+        ExpressionKind::Literal(value) => Tree::root(format!("Literal {:?}", value)),
+    }
+}
