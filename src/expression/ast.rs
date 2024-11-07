@@ -12,6 +12,10 @@ impl<T> AstNode<T> {
     pub fn new(span: Span, data: T) -> Self {
         Self { span, data }
     }
+
+    pub fn data(&self) -> &T {
+        &self.data
+    }
 }
 
 pub type ExpressionAst = AstNode<ExpressionKind>;

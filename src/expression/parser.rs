@@ -6,6 +6,7 @@ use crate::expression::value::ExpressionValue;
 use crate::result::ViuiResult;
 
 pub fn parse_expression(expression_string: &str) -> ViuiResult<ExpressionAst> {
+    dbg!(&expression_string);
     let tokens = lex(expression_string)?;
     let mut parser = Parser::new(expression_string, &tokens[..]);
     let ast = parser.parse_expression()?;

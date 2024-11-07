@@ -1,7 +1,6 @@
 use crate::bail;
 use crate::expression::span::Span;
 use crate::result::ViuiResult;
-use logos::Logos;
 use unscanny::Scanner;
 
 #[derive(Debug)]
@@ -96,6 +95,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn pop_state(&mut self) {
+        // TODO: better error reporting
         self.current_state = self.state_stack.pop().unwrap();
     }
 

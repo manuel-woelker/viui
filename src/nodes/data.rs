@@ -1,5 +1,5 @@
 use crate::err;
-use crate::model::Text;
+use crate::expression::ast::ExpressionAst;
 use crate::nodes::types::{PropsBox, StateBox};
 use crate::result::ViuiResult;
 use crate::types::Rect;
@@ -22,7 +22,7 @@ pub struct LayoutInfo {
 
 pub struct PropExpression {
     pub field_name: String,
-    pub text: Text,
+    pub expression: ExpressionAst,
 }
 
 impl NodeData {

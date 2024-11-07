@@ -1,5 +1,9 @@
 use crate::arenal::{Arenal, Idx};
 use crate::bail;
+use crate::expression::ast::ExpressionAst;
+use crate::expression::eval::eval;
+use crate::expression::parser::parse_expression;
+use crate::expression::value::ExpressionValue;
 use crate::model::{ComponentNode, Text, TextPart};
 use crate::nodes::data::{LayoutInfo, NodeData, PropExpression};
 use crate::nodes::elements::button::ButtonElement;
@@ -250,11 +254,50 @@ impl UI {
         for node in self.node_arena.entries_mut() {
             for expression in &node.prop_expressions {
                 let prop = node.props.reflect_path_mut(&*expression.field_name)?;
-                let string = text_to_string(self.app_state.as_ref(), &expression.text.parts)?;
+                let app_state = self.app_state.state();
+                let value = eval(&expression.expression, &|name| {
+                    let value = app_state.reflect_path(name)?;
+                    if let Some(value) = value.downcast_ref::<f32>() {
+                        Ok(ExpressionValue::Float(*value))
+                    } else if let Some(value) = value.downcast_ref::<i32>() {
+                        Ok(ExpressionValue::Float(*value as f32))
+                    } else if let Some(value) = value.downcast_ref::<String>() {
+                        Ok(ExpressionValue::String(value.clone()))
+                    } else {
+                        bail!(
+                            "Unsupported property type for {}: {}",
+                            name,
+                            value.reflect_short_type_path()
+                        );
+                    }
+                })?;
                 if let Some(prop) = prop.downcast_mut::<f32>() {
-                    *prop = string.parse::<f32>()?;
+                    let ExpressionValue::Float(value) = value else {
+                        bail!(
+                            "Expected float for property {}, but was: {}",
+                            expression.field_name,
+                            value
+                        );
+                    };
+                    *prop = value;
+                } else if let Some(prop) = prop.downcast_mut::<i32>() {
+                    let ExpressionValue::Float(value) = value else {
+                        bail!(
+                            "Expected number for property {}, but was: {}",
+                            expression.field_name,
+                            value
+                        );
+                    };
+                    *prop = value as i32;
                 } else if let Some(prop) = prop.downcast_mut::<String>() {
-                    prop.apply(&string);
+                    let ExpressionValue::String(value) = value else {
+                        bail!(
+                            "Expected string for property {}, but was: {}",
+                            expression.field_name,
+                            value
+                        );
+                    };
+                    *prop = value;
                 } else {
                     error!(
                         "Unsupported property type for {}: {}",
@@ -291,12 +334,17 @@ impl UI {
         Ok(render_commands)
     }
 
-    pub fn set_node_prop(&mut self, node_index: &Idx<NodeData>, field_name: &str, text: Text) {
+    pub fn set_node_prop(
+        &mut self,
+        node_index: &Idx<NodeData>,
+        field_name: &str,
+        expression: ExpressionAst,
+    ) {
         self.node_arena[node_index]
             .prop_expressions
             .push(PropExpression {
                 field_name: field_name.to_string(),
-                text,
+                expression,
             });
     }
 
@@ -331,11 +379,7 @@ impl UI {
         for child in root.children {
             let node_idx = self.add_node(&child.kind)?;
             for (prop, expression) in child.props {
-                self.set_node_prop(
-                    &node_idx,
-                    &prop,
-                    parse_expression_to_text::parse_expression_to_text(&expression)?,
-                );
+                self.set_node_prop(&node_idx, &prop, parse_expression(&expression)?);
             }
             for (event_name, message_expression) in child.events {
                 self.set_event_mapping(&node_idx, &event_name, message_expression);
