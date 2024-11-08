@@ -138,9 +138,9 @@ macro_rules! err {
 #[macro_export]
 macro_rules! context {
     ($fmt:expr $(, $($args:expr),+)? => $block:block) => {
-        (|| ->$crate::result::ViuiResult<_> {
+        {
             $block
-        })().map_err(|e| e.change_context(format!(concat!("Failed to ",$fmt) $(, $($args)+)?)))
+        }.map_err(|e: $crate::result::ViuiError| e.change_context(format!(concat!("Failed to ",$fmt) $(, $($args)+)?)))
     };
 }
 pub use context;
@@ -152,9 +152,9 @@ mod tests {
     #[test]
     fn test_context_macro_ok() {
         let _result = (|| -> ViuiResult<u32> {
-            return context!("grok stuff for {}", "bar" => {
+            context!("grok stuff for {}", "bar" => {
                 Ok(0)
-            });
+            })
         })()
         .unwrap();
     }
@@ -165,9 +165,9 @@ mod tests {
             Err("ungrokkable")?
         }
         let result = (|| -> ViuiResult<u32> {
-            return context!("grok stuff for {}", "bar" => {
-                Ok(my_broken_function()?)
-            });
+            context!("grok stuff for {}", "bar" => {
+                my_broken_function()
+            })
         })()
         .expect_err("Should have errored, but was");
         assert_eq!(

@@ -33,12 +33,7 @@ pub struct Idx<T> {
 
 impl<T> Clone for Idx<T> {
     fn clone(&self) -> Self {
-        Idx {
-            arenal_id: self.arenal_id,
-            generation: self.generation,
-            offset: self.offset,
-            marker: std::marker::PhantomData,
-        }
+        *self
     }
 }
 

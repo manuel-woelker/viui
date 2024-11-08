@@ -59,7 +59,7 @@ pub struct RenderBackendMessage {
 }
 
 impl UI {
-    pub fn new<'a, MESSAGE: DeserializeOwned + Reflect + FromReflect + Debug + Sized>(
+    pub fn new<MESSAGE: DeserializeOwned + Reflect + FromReflect + Debug + Sized>(
         state: ObservableState,
         event_handler: impl Fn(&mut ObservableState, &MESSAGE) + Send + 'static,
     ) -> ViuiResult<UI> {

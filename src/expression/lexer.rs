@@ -134,7 +134,7 @@ impl<'a> Lexer<'a> {
     fn create_token(&mut self, start: usize, kind: TokenKind) {
         self.tokens.push(Token {
             kind,
-            lexeme: &self.scanner.from(start),
+            lexeme: self.scanner.from(start),
             span: Span::new(start, self.scanner.cursor()),
         });
     }

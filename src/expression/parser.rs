@@ -105,6 +105,7 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use crate::expression::ast::print_expression_ast;
+    use assertables::assert_contains;
     use expect_test::{expect, Expect};
 
     fn test_parse(input: &str, expected_output: Expect) {
@@ -166,13 +167,13 @@ mod tests {
 
     #[test]
     fn test_parse_empty() {
-        let result = super::parse_expression("").unwrap();
-        dbg!(result);
+        let error = super::parse_expression("").unwrap_err();
+        assert_contains!(error.to_string(), "Unexpected token");
     }
 
     #[test]
     fn test_parse_invalid_symbols() {
-        let result = super::parse_expression("#?").unwrap();
-        dbg!(result);
+        let error = super::parse_expression("#?").unwrap_err();
+        assert_contains!(error.to_string(), "Unexpected token");
     }
 }
