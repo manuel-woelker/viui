@@ -51,6 +51,7 @@ impl FemtovgRenderBackend {
                     }
                 } else {
                     error!("Could not receive message");
+                    return;
                 }
             })
             .unwrap();

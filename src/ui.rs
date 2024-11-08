@@ -1,8 +1,8 @@
 use crate::arenal::{Arenal, Idx};
 use crate::component::ast::{ComponentAst, ExpressionAst};
 use crate::component::eval::eval;
-use crate::component::parser::{parse_expression, parse_ui};
-use crate::component::value::ExpressionValue;
+use crate::component::parser::parse_ui;
+use crate::component::value::{ExpressionValue, FunctionValue};
 use crate::model::ComponentNode;
 use crate::nodes::data::{LayoutInfo, NodeData, PropExpression};
 use crate::nodes::elements::button::ButtonElement;
@@ -16,7 +16,10 @@ use crate::render::command::RenderCommand;
 use crate::result::{context, ViuiResult};
 use crate::types::{Point, Rect, Size};
 use crate::{bail, err};
-use bevy_reflect::{FromReflect, GetPath, Reflect};
+use bevy_reflect::TypeInfo::Enum;
+use bevy_reflect::{
+    DynamicEnum, DynamicTuple, DynamicVariant, FromReflect, GetPath, Reflect, Typed, VariantInfo,
+};
 use crossbeam_channel::{select, Receiver, Sender};
 use log::debug;
 use notify::{RecommendedWatcher, RecursiveMode};
@@ -34,7 +37,7 @@ use std::time::Duration;
 use tracing::error;
 
 pub type ApplicationEventHandler = Box<dyn Fn(&mut ObservableState, &dyn Reflect) + Send>;
-pub type MessageStringToEnumConverter = Box<dyn Fn(&str) -> ViuiResult<Box<dyn Reflect>> + Send>;
+pub type MessageStringToEnumConverter = Box<dyn Fn(&str) -> ViuiResult<ExpressionValue> + Send>;
 
 pub struct UI {
     root_component_name: String,
@@ -62,7 +65,7 @@ pub struct RenderBackendMessage {
 }
 
 impl UI {
-    pub fn new<MESSAGE: DeserializeOwned + Reflect + FromReflect + Debug + Sized>(
+    pub fn new<MESSAGE: DeserializeOwned + Reflect + FromReflect + Debug + Sized + Typed>(
         state: ObservableState,
         root_component_name: String,
         event_handler: impl Fn(&mut ObservableState, &MESSAGE) + Send + 'static,
@@ -70,9 +73,48 @@ impl UI {
         let (event_sender, event_receiver) = crossbeam_channel::bounded::<UiEvent>(4);
         let (file_change_sender, file_change_receiver) = crossbeam_channel::bounded::<()>(4);
         let message_string_to_enum_converter =
-            Box::new(|message_string: &str| -> ViuiResult<Box<dyn Reflect>> {
-                let message = ron::de::from_str::<MESSAGE>(message_string)?;
-                Ok(Box::new(message))
+            Box::new(|variant_name: &str| -> ViuiResult<ExpressionValue> {
+                let type_info = MESSAGE::type_info();
+                let Enum(enum_info) = type_info else {
+                    bail!("Not an enum value: {}", type_info.type_path());
+                };
+                let Some(variant_info) = enum_info.variant(variant_name) else {
+                    bail!(
+                        "Not enum variant: {}::{} (found variants: {})",
+                        type_info.type_path(),
+                        variant_name,
+                        enum_info.variant_names().join(", ")
+                    );
+                };
+                match variant_info {
+                    VariantInfo::Unit(unit_info) => {
+                        let dynamic_enum = DynamicEnum::new(variant_name, DynamicVariant::Unit);
+                        let message = MESSAGE::from_reflect(&dynamic_enum).unwrap();
+                        Ok(ExpressionValue::Reflect(Arc::new(message)))
+                    }
+                    VariantInfo::Tuple(tuple_info) => {
+                        let variant_name = variant_name.to_string();
+                        Ok(ExpressionValue::function(
+                            variant_name.clone(),
+                            move |args: &[ExpressionValue]| -> ViuiResult<ExpressionValue> {
+                                let mut tuple = DynamicTuple::default();
+                                for arg in args {
+                                    tuple.insert_boxed(arg.as_reflect_box());
+                                }
+                                let dynamic_enum =
+                                    DynamicEnum::new(&variant_name, DynamicVariant::Tuple(tuple));
+                                let message = MESSAGE::from_reflect(&dynamic_enum).unwrap();
+                                Ok(ExpressionValue::Reflect(Arc::new(message)))
+                            },
+                        ))
+                    }
+                    VariantInfo::Struct(_) => {
+                        todo!("Implement struct enum variant");
+                    }
+                }
+                //                let mut message_string = String::new();
+                //                let message = ron::de::from_str::<MESSAGE>(message_string)?;
+                //                Ok(Box::new(message))
             });
         let file_watcher = new_debouncer(
             Duration::from_millis(10),
@@ -230,14 +272,21 @@ impl UI {
             for event in events {
                 let (event_name, value) = event.split_once(":").unwrap_or((&event, ""));
                 if let Some(message_expression) = node.event_mappings.get(event_name) {
-                    let value = eval_expression(
+                    let result = eval_expression(
                         self.app_state.state(),
                         &self.message_string_to_enum_converter,
                         message_expression,
+                        &|name| {
+                            Ok(if name == "value" {
+                                Some(ExpressionValue::Float(value.parse()?))
+                            } else {
+                                None
+                            })
+                        },
                     )?;
                     /*                    let message_expression = message_expression.replace("${value}", value);
                     let message = (self.message_string_to_enum_converter)(&message_expression)?;*/
-                    (self.event_handler)(self.app_state.as_mut(), value.as_reflect());
+                    (self.event_handler)(self.app_state.as_mut(), result.as_reflect());
                 } else {
                     bail!("No event mapping found for event: {}", event);
                 }
@@ -268,6 +317,7 @@ impl UI {
                     app_state,
                     &self.message_string_to_enum_converter,
                     &expression.expression,
+                    &|_name| Ok(None),
                 )?;
                 if let Some(prop) = prop.downcast_mut::<f32>() {
                     let ExpressionValue::Float(value) = value else {
@@ -403,8 +453,12 @@ fn eval_expression(
     app_state: &dyn Reflect,
     converter: &MessageStringToEnumConverter,
     expression: &ExpressionAst,
+    lookup: &dyn Fn(&str) -> ViuiResult<Option<ExpressionValue>>,
 ) -> ViuiResult<ExpressionValue> {
     let value = eval(&expression, &|name| {
+        if let Some(value) = lookup(name)? {
+            return Ok(value);
+        }
         if let Ok(value) = app_state.reflect_path(name) {
             if let Some(value) = value.downcast_ref::<f32>() {
                 Ok(ExpressionValue::Float(*value))
@@ -420,7 +474,7 @@ fn eval_expression(
                 );
             }
         } else {
-            Ok(ExpressionValue::Reflect(Arc::from(converter(name)?)))
+            converter(name)
         }
     })?;
     Ok(value)

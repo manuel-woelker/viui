@@ -1,3 +1,4 @@
+use crate::bail;
 use crate::component::ast::{ExpressionAst, ExpressionKind};
 use crate::component::value::ExpressionValue;
 use crate::result::ViuiResult;
@@ -30,8 +31,16 @@ impl<'a> Evaluator<'a> {
                 result.push_str(strings.iter().last().unwrap());
                 Ok(ExpressionValue::String(result))
             }
-            ExpressionKind::Call { .. } => {
-                todo!("Implement call expression evaluation")
+            ExpressionKind::Call { callee, arguments } => {
+                let mut callee = self.eval(callee)?;
+                let ExpressionValue::Function(function) = callee else {
+                    bail!("Not a function: {}", callee);
+                };
+                let arguments = arguments
+                    .iter()
+                    .map(|arg| self.eval(arg))
+                    .collect::<ViuiResult<Vec<ExpressionValue>>>()?;
+                function.invoke(arguments)
             }
         }
     }
