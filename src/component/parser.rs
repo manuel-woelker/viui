@@ -1,8 +1,8 @@
 use crate::bail;
-use crate::expression::ast::{ExpressionAst, ExpressionKind};
-use crate::expression::lexer::{lex, Token, TokenKind};
-use crate::expression::span::Span;
-use crate::expression::value::ExpressionValue;
+use crate::component::ast::{ExpressionAst, ExpressionKind};
+use crate::component::lexer::{lex, Token, TokenKind};
+use crate::component::span::Span;
+use crate::component::value::ExpressionValue;
 use crate::result::ViuiResult;
 
 pub fn parse_expression(expression_string: &str) -> ViuiResult<ExpressionAst> {
@@ -104,7 +104,7 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::expression::ast::print_expression_ast;
+    use crate::component::ast::print_expression_ast;
     use assertables::assert_contains;
     use expect_test::{expect, Expect};
 

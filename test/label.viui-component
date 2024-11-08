@@ -1,0 +1,3 @@
+component LabelComponent {
+	label(text=`Counter: ${counter}`)
+}

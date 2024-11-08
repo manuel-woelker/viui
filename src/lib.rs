@@ -1,5 +1,5 @@
 pub mod arenal;
-pub mod expression;
+pub mod component;
 pub mod logging;
 pub mod model;
 pub mod nodes;

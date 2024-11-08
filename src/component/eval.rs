@@ -1,5 +1,5 @@
-use crate::expression::ast::ExpressionAst;
-use crate::expression::value::ExpressionValue;
+use crate::component::ast::ExpressionAst;
+use crate::component::value::ExpressionValue;
 use crate::result::ViuiResult;
 
 type VarLookUp<'a> = dyn Fn(&str) -> ViuiResult<ExpressionValue> + 'a;
@@ -16,9 +16,9 @@ struct Evaluator<'a> {
 impl<'a> Evaluator<'a> {
     pub fn eval(&self, expression: &ExpressionAst) -> ViuiResult<ExpressionValue> {
         match &expression.data() {
-            crate::expression::ast::ExpressionKind::Literal(value) => Ok(value.clone()),
-            crate::expression::ast::ExpressionKind::VarUse(name) => (self.var_lookup)(name),
-            crate::expression::ast::ExpressionKind::StringTemplate {
+            crate::component::ast::ExpressionKind::Literal(value) => Ok(value.clone()),
+            crate::component::ast::ExpressionKind::VarUse(name) => (self.var_lookup)(name),
+            crate::component::ast::ExpressionKind::StringTemplate {
                 strings,
                 expressions,
             } => {
@@ -38,7 +38,7 @@ impl<'a> Evaluator<'a> {
 mod tests {
     use super::*;
     use crate::bail;
-    use crate::expression::parser::parse_expression;
+    use crate::component::parser::parse_expression;
     #[test]
     fn test_eval() {
         fn var_lookup(name: &str) -> ViuiResult<ExpressionValue> {

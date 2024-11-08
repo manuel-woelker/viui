@@ -1,9 +1,9 @@
 use crate::arenal::{Arenal, Idx};
 use crate::bail;
-use crate::expression::ast::ExpressionAst;
-use crate::expression::eval::eval;
-use crate::expression::parser::parse_expression;
-use crate::expression::value::ExpressionValue;
+use crate::component::ast::ExpressionAst;
+use crate::component::eval::eval;
+use crate::component::parser::parse_expression;
+use crate::component::value::ExpressionValue;
 use crate::model::ComponentNode;
 use crate::nodes::data::{LayoutInfo, NodeData, PropExpression};
 use crate::nodes::elements::button::ButtonElement;

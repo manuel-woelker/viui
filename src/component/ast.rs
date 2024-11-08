@@ -1,5 +1,5 @@
-use crate::expression::span::Span;
-use crate::expression::value::ExpressionValue;
+use crate::component::span::Span;
+use crate::component::value::ExpressionValue;
 use treeline::Tree;
 
 #[derive(Debug)]

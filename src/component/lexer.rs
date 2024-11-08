@@ -1,5 +1,5 @@
 use crate::bail;
-use crate::expression::span::Span;
+use crate::component::span::Span;
 use crate::result::ViuiResult;
 use unscanny::Scanner;
 
