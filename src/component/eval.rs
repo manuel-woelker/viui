@@ -1,4 +1,4 @@
-use crate::component::ast::ExpressionAst;
+use crate::component::ast::{ExpressionAst, ExpressionKind};
 use crate::component::value::ExpressionValue;
 use crate::result::ViuiResult;
 
@@ -15,10 +15,10 @@ struct Evaluator<'a> {
 
 impl<'a> Evaluator<'a> {
     pub fn eval(&self, expression: &ExpressionAst) -> ViuiResult<ExpressionValue> {
-        match &expression.data() {
-            crate::component::ast::ExpressionKind::Literal(value) => Ok(value.clone()),
-            crate::component::ast::ExpressionKind::VarUse(name) => (self.var_lookup)(name),
-            crate::component::ast::ExpressionKind::StringTemplate {
+        match expression.data() {
+            ExpressionKind::Literal(value) => Ok(value.clone()),
+            ExpressionKind::VarUse(name) => (self.var_lookup)(name),
+            ExpressionKind::StringTemplate {
                 strings,
                 expressions,
             } => {
@@ -29,6 +29,9 @@ impl<'a> Evaluator<'a> {
                 }
                 result.push_str(strings.iter().last().unwrap());
                 Ok(ExpressionValue::String(result))
+            }
+            ExpressionKind::Call { .. } => {
+                todo!("Implement call expression evaluation")
             }
         }
     }

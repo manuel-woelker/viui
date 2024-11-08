@@ -20,6 +20,7 @@ pub enum TokenKind {
     Equal,
     At,
     Component,
+    Comma,
 }
 
 #[derive(Debug)]
@@ -102,6 +103,9 @@ impl<'a> Lexer<'a> {
             }
             '@' => {
                 self.create_token(start, TokenKind::At);
+            }
+            ',' => {
+                self.create_token(start, TokenKind::Comma);
             }
             'a'..='z' | 'A'..='Z' | '_' => {
                 self.scanner.eat_while(char::is_alphanumeric);
