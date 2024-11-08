@@ -1,7 +1,26 @@
 use crate::bail;
 use crate::component::span::Span;
 use crate::result::ViuiResult;
+use phf::phf_map;
 use unscanny::Scanner;
+
+#[derive(Debug, PartialEq, Copy, Clone)]
+pub enum TokenKind {
+    Identifier,
+    Number,
+    String,
+    TemplateString,
+    EOF,
+    Unexpected,
+    StartTemplateLiteralExpression,
+    OpenBrace,
+    CloseBrace,
+    OpenParen,
+    CloseParen,
+    Equal,
+    At,
+    Component,
+}
 
 #[derive(Debug)]
 pub struct Token<'a> {
@@ -28,6 +47,10 @@ pub struct Lexer<'a> {
     scanner: Scanner<'a>,
     tokens: Vec<Token<'a>>,
 }
+
+static KEYWORDS: phf::Map<&'static str, TokenKind> = phf_map! {
+    "component" => TokenKind::Component,
+};
 
 impl<'a> Lexer<'a> {
     pub fn new(input: &'a str) -> Self {
@@ -64,9 +87,29 @@ impl<'a> Lexer<'a> {
                 self.pop_state();
                 self.create_token(start, TokenKind::CloseBrace);
             }
+            '{' => {
+                self.push_state(LexerState::Code);
+                self.create_token(start, TokenKind::OpenBrace);
+            }
+            '(' => {
+                self.create_token(start, TokenKind::OpenParen);
+            }
+            ')' => {
+                self.create_token(start, TokenKind::CloseParen);
+            }
+            '=' => {
+                self.create_token(start, TokenKind::Equal);
+            }
+            '@' => {
+                self.create_token(start, TokenKind::At);
+            }
             'a'..='z' | 'A'..='Z' | '_' => {
                 self.scanner.eat_while(char::is_alphanumeric);
-                self.create_token(start, TokenKind::Identifier);
+                if let Some(keyword) = KEYWORDS.get(self.scanner.from(start)) {
+                    self.create_token(start, *keyword);
+                } else {
+                    self.create_token(start, TokenKind::Identifier);
+                }
             }
             '0'..='9' | '-' => {
                 self.scanner
@@ -83,7 +126,6 @@ impl<'a> Lexer<'a> {
             }
             _ => {
                 self.create_token(start, TokenKind::Unexpected);
-                self.create_token(self.scanner.cursor(), TokenKind::EOF);
             }
         }
         Ok(())
@@ -95,8 +137,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn pop_state(&mut self) {
-        // TODO: better error reporting
-        self.current_state = self.state_stack.pop().unwrap();
+        self.current_state = self.state_stack.pop().unwrap_or(LexerState::Code);
     }
 
     fn lex_template_literal(&mut self) -> ViuiResult<()> {
@@ -138,18 +179,6 @@ impl<'a> Lexer<'a> {
             span: Span::new(start, self.scanner.cursor()),
         });
     }
-}
-
-#[derive(Debug, PartialEq, Copy, Clone)]
-pub enum TokenKind {
-    Identifier,
-    Number,
-    String,
-    TemplateString,
-    EOF,
-    Unexpected,
-    StartTemplateLiteralExpression,
-    CloseBrace,
 }
 
 #[cfg(test)]
@@ -212,9 +241,8 @@ mod tests {
             <EOF> '' 5+0
         "#]];
 
-        test_unexpected, "=", expect![[r#"
-            <Unexpected> '=' 0+1
-            <EOF> '' 1+0
+        test_unexpected, "#", expect![[r#"
+            <Unexpected> '#' 0+1
             <EOF> '' 1+0
         "#]];
 
@@ -284,6 +312,36 @@ mod tests {
             <Identifier> 'a' 0+1
             <Identifier> 'b' 5+1
             <EOF> '' 6+0
+        "#]];
+
+        test_open_brace, "{", expect![[r#"
+            <OpenBrace> '{' 0+1
+            <EOF> '' 1+0
+        "#]];
+        test_close_brace, "}", expect![[r#"
+            <CloseBrace> '}' 0+1
+            <EOF> '' 1+0
+        "#]];
+
+        test_open_paren, "(", expect![[r#"
+            <OpenParen> '(' 0+1
+            <EOF> '' 1+0
+        "#]];
+        test_close_paren, ")", expect![[r#"
+            <CloseParen> ')' 0+1
+            <EOF> '' 1+0
+        "#]];
+        test_equal, "=", expect![[r#"
+            <Equal> '=' 0+1
+            <EOF> '' 1+0
+        "#]];
+        test_at, "@", expect![[r#"
+            <At> '@' 0+1
+            <EOF> '' 1+0
+        "#]];
+        test_component, "component", expect![[r#"
+            <Component> 'component' 0+9
+            <EOF> '' 9+0
         "#]];
     );
 }
