@@ -4,6 +4,7 @@ use treeline::Tree;
 
 #[derive(Debug)]
 pub struct AstNode<T> {
+    #[allow(dead_code)]
     span: Span,
     data: T,
 }

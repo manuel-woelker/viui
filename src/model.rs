@@ -1,4 +1,3 @@
-use bevy_reflect::Reflect;
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -17,15 +16,4 @@ pub struct Node {
     pub props: HashMap<String, String>,
     #[serde(default)]
     pub events: HashMap<String, String>,
-}
-
-#[derive(Reflect, Default, Debug)]
-pub struct Text {
-    pub parts: Vec<TextPart>,
-}
-
-#[derive(Reflect, Debug, Eq, PartialEq, Hash)]
-pub enum TextPart {
-    FixedText(String),
-    VariableText(String),
 }

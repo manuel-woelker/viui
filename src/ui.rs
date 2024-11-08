@@ -4,7 +4,7 @@ use crate::expression::ast::ExpressionAst;
 use crate::expression::eval::eval;
 use crate::expression::parser::parse_expression;
 use crate::expression::value::ExpressionValue;
-use crate::model::{ComponentNode, Text, TextPart};
+use crate::model::ComponentNode;
 use crate::nodes::data::{LayoutInfo, NodeData, PropExpression};
 use crate::nodes::elements::button::ButtonElement;
 use crate::nodes::elements::kind::Element;
@@ -16,7 +16,6 @@ use crate::observable_state::ObservableState;
 use crate::render::command::RenderCommand;
 use crate::result::{context, ViuiResult};
 use crate::types::{Point, Rect, Size};
-use crate::util::parse_expression_to_text;
 use bevy_reflect::{FromReflect, GetPath, Reflect};
 use crossbeam_channel::{select, Receiver, Sender};
 use log::debug;
@@ -387,19 +386,4 @@ impl UI {
         }
         Ok(())
     }
-}
-
-fn text_to_string(app_state: &ObservableState, text: &Vec<TextPart>) -> ViuiResult<String> {
-    let mut string = "".to_string();
-    for part in text {
-        match part {
-            TextPart::FixedText(fixed_string) => {
-                string.push_str(fixed_string.as_str());
-            }
-            TextPart::VariableText(path) => {
-                string.push_str(&format!("{:?}", app_state.state().reflect_path(&**path)?));
-            }
-        }
-    }
-    Ok(string)
 }

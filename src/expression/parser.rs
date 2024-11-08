@@ -6,23 +6,20 @@ use crate::expression::value::ExpressionValue;
 use crate::result::ViuiResult;
 
 pub fn parse_expression(expression_string: &str) -> ViuiResult<ExpressionAst> {
-    dbg!(&expression_string);
     let tokens = lex(expression_string)?;
-    let mut parser = Parser::new(expression_string, &tokens[..]);
+    let mut parser = Parser::new(&tokens[..]);
     let ast = parser.parse_expression()?;
     Ok(ast)
 }
 
 pub struct Parser<'a> {
-    expression_string: &'a str,
     current_index: usize,
     tokens: &'a [Token<'a>],
 }
 
 impl<'a> Parser<'a> {
-    fn new(expression_string: &'a str, tokens: &'a [Token<'a>]) -> Self {
+    fn new(tokens: &'a [Token<'a>]) -> Self {
         Self {
-            expression_string,
             current_index: 0,
             tokens,
         }

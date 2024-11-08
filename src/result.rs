@@ -124,8 +124,8 @@ impl From<&str> for ViuiError {
 #[macro_export]
 macro_rules! bail {
     ($($args:tt)+) => {
-        return Err($crate::result::ViuiError::new($crate::result::ViuiErrorKind::General(format!($($args)+).into())));
-    };
+        return Err($crate::result::ViuiError::new($crate::result::ViuiErrorKind::General(format!($($args)+).into())))
+    }
 }
 
 #[macro_export]

@@ -71,14 +71,3 @@ pub struct ButtonElementState {
 }
 
 impl NodeState for ButtonElementState {}
-
-#[derive(Reflect, Default, Debug)]
-pub struct Text {
-    pub parts: Vec<TextPart>,
-}
-
-#[derive(Reflect, Debug)]
-pub enum TextPart {
-    FixedText(String),
-    VariableText(String),
-}

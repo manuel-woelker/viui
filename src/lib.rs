@@ -10,4 +10,3 @@ pub mod result;
 pub mod test_reflect;
 pub mod types;
 pub mod ui;
-pub mod util;
