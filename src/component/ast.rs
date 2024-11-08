@@ -17,6 +17,10 @@ impl<T> AstNode<T> {
     pub fn data(&self) -> &T {
         &self.data
     }
+
+    pub fn into_data(self) -> T {
+        self.data
+    }
 }
 pub type UIAst = AstNode<UIDefinition>;
 

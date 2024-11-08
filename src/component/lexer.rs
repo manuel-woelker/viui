@@ -108,7 +108,8 @@ impl<'a> Lexer<'a> {
                 self.create_token(start, TokenKind::Comma);
             }
             'a'..='z' | 'A'..='Z' | '_' => {
-                self.scanner.eat_while(char::is_alphanumeric);
+                self.scanner
+                    .eat_while(|c: char| c.is_ascii_alphanumeric() || c == '_');
                 if let Some(keyword) = KEYWORDS.get(self.scanner.from(start)) {
                     self.create_token(start, *keyword);
                 } else {
@@ -221,6 +222,10 @@ mod tests {
         test_identifier, "foo", expect![[r#"
             <Identifier> 'foo' 0+3
             <EOF> '' 3+0
+        "#]];
+        test_identifier_underscore, "foo_bar", expect![[r#"
+            <Identifier> 'foo_bar' 0+7
+            <EOF> '' 7+0
         "#]];
 
         test_number, "123", expect![[r#"

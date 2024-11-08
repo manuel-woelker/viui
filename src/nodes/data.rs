@@ -12,7 +12,7 @@ pub struct NodeData {
     pub state: StateBox,
     pub props: PropsBox,
     pub prop_expressions: Vec<PropExpression>,
-    pub event_mappings: HashMap<String, String>,
+    pub event_mappings: HashMap<String, ExpressionAst>,
 }
 
 #[derive(Clone, Debug, Default)]

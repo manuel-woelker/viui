@@ -39,6 +39,7 @@ fn main_internal() -> ViuiResult<()> {
     let gain_path = TypedPath::<Float>::new(ParsedPath::parse("gain")?);
     let mut ui = UI::new(
         app_state,
+        "CounterComponent".to_string(),
         move |app_state, message: &AppMessage| match message {
             AppMessage::Increment => {
                 app_state.apply_change("Increment", |mutator| {
@@ -57,7 +58,7 @@ fn main_internal() -> ViuiResult<()> {
             }
         },
     )?;
-    ui.set_root_node_file("counter.viui.yaml")?;
+    ui.set_root_node_file("counter.viui-component")?;
     let render_backend = FemtovgRenderBackend::new(ui.add_render_backend()?, ui.event_sender());
     ui.start()?;
     info!("VIUI Sandbox started");

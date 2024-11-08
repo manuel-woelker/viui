@@ -1,8 +1,7 @@
 use crate::arenal::{Arenal, Idx};
-use crate::bail;
-use crate::component::ast::ExpressionAst;
+use crate::component::ast::{ComponentAst, ExpressionAst};
 use crate::component::eval::eval;
-use crate::component::parser::parse_expression;
+use crate::component::parser::{parse_expression, parse_ui};
 use crate::component::value::ExpressionValue;
 use crate::model::ComponentNode;
 use crate::nodes::data::{LayoutInfo, NodeData, PropExpression};
@@ -16,6 +15,7 @@ use crate::observable_state::ObservableState;
 use crate::render::command::RenderCommand;
 use crate::result::{context, ViuiResult};
 use crate::types::{Point, Rect, Size};
+use crate::{bail, err};
 use bevy_reflect::{FromReflect, GetPath, Reflect};
 use crossbeam_channel::{select, Receiver, Sender};
 use log::debug;
@@ -24,9 +24,11 @@ use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
 use serde::de::DeserializeOwned;
 use std::fmt::Debug;
 use std::fs::File;
+use std::io::Read;
 use std::mem::take;
 use std::ops::IndexMut;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use tracing::error;
@@ -35,6 +37,7 @@ pub type ApplicationEventHandler = Box<dyn Fn(&mut ObservableState, &dyn Reflect
 pub type MessageStringToEnumConverter = Box<dyn Fn(&str) -> ViuiResult<Box<dyn Reflect>> + Send>;
 
 pub struct UI {
+    root_component_name: String,
     node_registry: NodeRegistry,
     node_arena: Arenal<NodeData>,
     app_state: Box<ObservableState>,
@@ -61,6 +64,7 @@ pub struct RenderBackendMessage {
 impl UI {
     pub fn new<MESSAGE: DeserializeOwned + Reflect + FromReflect + Debug + Sized>(
         state: ObservableState,
+        root_component_name: String,
         event_handler: impl Fn(&mut ObservableState, &MESSAGE) + Send + 'static,
     ) -> ViuiResult<UI> {
         let (event_sender, event_receiver) = crossbeam_channel::bounded::<UiEvent>(4);
@@ -87,6 +91,7 @@ impl UI {
         node_registry.register_node::<ButtonElement>(vec!["click".to_string()]);
         node_registry.register_node::<KnobElement>(vec!["click".to_string()]);
         Ok(UI {
+            root_component_name,
             node_registry,
             node_arena: Arenal::new(),
             app_state: Box::new(state),
@@ -225,9 +230,14 @@ impl UI {
             for event in events {
                 let (event_name, value) = event.split_once(":").unwrap_or((&event, ""));
                 if let Some(message_expression) = node.event_mappings.get(event_name) {
-                    let message_expression = message_expression.replace("${value}", value);
-                    let message = (self.message_string_to_enum_converter)(&message_expression)?;
-                    (self.event_handler)(self.app_state.as_mut(), message.as_ref());
+                    let value = eval_expression(
+                        self.app_state.state(),
+                        &self.message_string_to_enum_converter,
+                        message_expression,
+                    )?;
+                    /*                    let message_expression = message_expression.replace("${value}", value);
+                    let message = (self.message_string_to_enum_converter)(&message_expression)?;*/
+                    (self.event_handler)(self.app_state.as_mut(), value.as_reflect());
                 } else {
                     bail!("No event mapping found for event: {}", event);
                 }
@@ -254,22 +264,11 @@ impl UI {
             for expression in &node.prop_expressions {
                 let prop = node.props.reflect_path_mut(&*expression.field_name)?;
                 let app_state = self.app_state.state();
-                let value = eval(&expression.expression, &|name| {
-                    let value = app_state.reflect_path(name)?;
-                    if let Some(value) = value.downcast_ref::<f32>() {
-                        Ok(ExpressionValue::Float(*value))
-                    } else if let Some(value) = value.downcast_ref::<i32>() {
-                        Ok(ExpressionValue::Float(*value as f32))
-                    } else if let Some(value) = value.downcast_ref::<String>() {
-                        Ok(ExpressionValue::String(value.clone()))
-                    } else {
-                        bail!(
-                            "Unsupported property type for {}: {}",
-                            name,
-                            value.reflect_short_type_path()
-                        );
-                    }
-                })?;
+                let value = eval_expression(
+                    app_state,
+                    &self.message_string_to_enum_converter,
+                    &expression.expression,
+                )?;
                 if let Some(prop) = prop.downcast_mut::<f32>() {
                     let ExpressionValue::Float(value) = value else {
                         bail!(
@@ -347,7 +346,12 @@ impl UI {
             });
     }
 
-    pub fn set_event_mapping(&mut self, node_index: &Idx<NodeData>, event: &str, message: String) {
+    pub fn set_event_mapping(
+        &mut self,
+        node_index: &Idx<NodeData>,
+        event: &str,
+        message: ExpressionAst,
+    ) {
         self.node_arena
             .index_mut(node_index)
             .event_mappings
@@ -367,23 +371,57 @@ impl UI {
 
     fn load_root_node_file(&mut self) -> ViuiResult<()> {
         context!("load root context file {:?}", self.root_node_file => {
-            let model: ComponentNode = serde_yml::from_reader(File::open(&self.root_node_file)?)?;
-            self.set_root_node(model)?;
+            let mut string = String::new();
+            File::open(&self.root_node_file)?.read_to_string(&mut string)?;
+            let ast = parse_ui(&string)?;
+            let root_component= ast.into_data().components.into_iter().find(|candidate| candidate.data().name == self.root_component_name).ok_or_else(|| err!("Could not find root component: {:?}", self.root_component_name))?;
+            //let model: ComponentNode = serde_yml::from_reader(File::open(&self.root_node_file)?)?;
+            self.set_root_node(root_component)?;
             Ok(())
         })
     }
 
-    pub fn set_root_node(&mut self, root: ComponentNode) -> ViuiResult<()> {
+    pub fn set_root_node(&mut self, root: ComponentAst) -> ViuiResult<()> {
         self.node_arena.clear();
-        for child in root.children {
-            let node_idx = self.add_node(&child.kind)?;
-            for (prop, expression) in child.props {
-                self.set_node_prop(&node_idx, &prop, parse_expression(&expression)?);
+        for child in root.into_data().children {
+            let node_idx = self.add_node(&child.data().tag)?;
+            let child_data = child.into_data();
+            for prop in child_data.props {
+                let prop_data = prop.into_data();
+                self.set_node_prop(&node_idx, &prop_data.name, prop_data.expression);
             }
-            for (event_name, message_expression) in child.events {
-                self.set_event_mapping(&node_idx, &event_name, message_expression);
+            for event in child_data.events {
+                let event_data = event.into_data();
+                self.set_event_mapping(&node_idx, &event_data.name, event_data.expression);
             }
         }
         Ok(())
     }
+}
+
+fn eval_expression(
+    app_state: &dyn Reflect,
+    converter: &MessageStringToEnumConverter,
+    expression: &ExpressionAst,
+) -> ViuiResult<ExpressionValue> {
+    let value = eval(&expression, &|name| {
+        if let Ok(value) = app_state.reflect_path(name) {
+            if let Some(value) = value.downcast_ref::<f32>() {
+                Ok(ExpressionValue::Float(*value))
+            } else if let Some(value) = value.downcast_ref::<i32>() {
+                Ok(ExpressionValue::Float(*value as f32))
+            } else if let Some(value) = value.downcast_ref::<String>() {
+                Ok(ExpressionValue::String(value.clone()))
+            } else {
+                bail!(
+                    "Unsupported property type for {}: {}",
+                    name,
+                    value.reflect_short_type_path()
+                );
+            }
+        } else {
+            Ok(ExpressionValue::Reflect(Arc::from(converter(name)?)))
+        }
+    })?;
+    Ok(value)
 }

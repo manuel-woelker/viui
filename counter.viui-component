@@ -1,0 +1,12 @@
+component CounterComponent {
+	label(label=`Counter: ${counter}`)
+	button(label="Increment" @click=Increment)
+	button(label="Decrement" @click=Decrement)
+	knob(
+		min_value=0
+		max_value=10
+		value=gain
+		label="Gain"
+		@change=Increment
+	)
+}
