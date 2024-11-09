@@ -10,14 +10,15 @@ use crate::nodes::elements::knob::KnobElement;
 use crate::nodes::elements::label::LabelElement;
 use crate::nodes::events::{InputEvent, MouseEventKind, UiEvent, UiEventKind};
 use crate::nodes::registry::NodeRegistry;
+use crate::nodes::types::NodeEvents;
 use crate::observable_state::ObservableState;
 use crate::render::command::RenderCommand;
 use crate::result::{context, ViuiResult};
-use crate::types::{Point, Rect, Size};
+use crate::types::{Float, Point, Rect, Size};
 use crate::{bail, err};
-use bevy_reflect::TypeInfo::Enum;
 use bevy_reflect::{
-    DynamicEnum, DynamicTuple, DynamicVariant, FromReflect, GetPath, Reflect, Typed, VariantInfo,
+    DynamicEnum, DynamicTuple, DynamicVariant, FromReflect, GetPath, Reflect, ReflectRef, TypeInfo,
+    Typed, VariantInfo,
 };
 use crossbeam_channel::{select, Receiver, Sender};
 use log::debug;
@@ -74,7 +75,7 @@ impl UI {
         let message_string_to_enum_converter =
             Box::new(|variant_name: &str| -> ViuiResult<ExpressionValue> {
                 let type_info = MESSAGE::type_info();
-                let Enum(enum_info) = type_info else {
+                let TypeInfo::Enum(enum_info) = type_info else {
                     bail!("Not an enum value: {}", type_info.type_path());
                 };
                 let Some(variant_info) = enum_info.variant(variant_name) else {
@@ -125,9 +126,9 @@ impl UI {
         )?;
 
         let mut node_registry = NodeRegistry::new();
-        node_registry.register_node::<LabelElement>(vec![]);
-        node_registry.register_node::<ButtonElement>(vec!["click".to_string()]);
-        node_registry.register_node::<KnobElement>(vec!["click".to_string()]);
+        node_registry.register_node::<LabelElement>();
+        node_registry.register_node::<ButtonElement>();
+        node_registry.register_node::<KnobElement>();
         Ok(UI {
             root_component_name,
             node_registry,
@@ -260,13 +261,47 @@ impl UI {
         for (node_idx, event) in events_to_trigger {
             let node = &mut self.node_arena[&node_idx];
             let mut events = Vec::new();
-            let mut event_trigger = |event: &str| {
-                events.push(event.to_string());
+            let mut event_trigger = |event: Box<dyn NodeEvents>| {
+                events.push(event);
             };
             self.node_registry
                 .handle_event(node.kind_index, event, node, &mut event_trigger)?;
             for event in events {
-                let (event_name, value) = event.split_once(":").unwrap_or((&event, ""));
+                let ReflectRef::Enum(dyn_enum) = event.reflect_ref() else {
+                    bail!(
+                        "Event is not an enum: {}",
+                        event.get_represented_type_info().unwrap().type_path()
+                    );
+                };
+                let variant_name = dyn_enum.variant_name().to_lowercase();
+                if let Some(message_expression) = node.event_mappings.get(&variant_name) {
+                    let result = eval_expression(
+                        self.app_state.state(),
+                        &self.message_string_to_enum_converter,
+                        message_expression,
+                        &|name| {
+                            Ok(if name == "value" {
+                                let value = dyn_enum.field_at(0).unwrap().clone_value();
+                                if let Some(value) = value.downcast_ref::<Float>() {
+                                    Some(ExpressionValue::Float(*value))
+                                } else {
+                                    bail!(
+                                        "Could not convert value to expression value: {:?} {}",
+                                        value,
+                                        value.reflect_short_type_path()
+                                    );
+                                }
+                            } else {
+                                None
+                            })
+                        },
+                    )?;
+                    (self.event_handler)(self.app_state.as_mut(), result.as_reflect());
+                } else {
+                    bail!("No event mapping found for event: {:?}", event);
+                }
+                //dbg!(&event.as_reflect().downcast_ref::<dyn bevy_reflect::Enum>());
+                /*                let (event_name, value) = event.split_once(":").unwrap_or((&event, ""));
                 if let Some(message_expression) = node.event_mappings.get(event_name) {
                     let result = eval_expression(
                         self.app_state.state(),
@@ -280,12 +315,10 @@ impl UI {
                             })
                         },
                     )?;
-                    /*                    let message_expression = message_expression.replace("${value}", value);
-                    let message = (self.message_string_to_enum_converter)(&message_expression)?;*/
                     (self.event_handler)(self.app_state.as_mut(), result.as_reflect());
                 } else {
                     bail!("No event mapping found for event: {}", event);
-                }
+                }*/
             }
             /*            // Found clicked node
             if let Some(message) = node.event_mappings.get(event) {
@@ -298,10 +331,8 @@ impl UI {
     }
 
     pub fn register_node<T: Element>(&mut self) {
-        // TODO: fix event registration
         // TODO: Check if node is already registered
-        self.node_registry
-            .register_node::<T>(vec!["click".to_string(), "change".to_string()]);
+        self.node_registry.register_node::<T>();
     }
 
     pub fn eval_expressions(&mut self) -> ViuiResult<()> {

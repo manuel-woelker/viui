@@ -18,7 +18,7 @@ impl Element for KnobElement {
         event: &InputEvent,
         state: &mut Self::State,
         props: &Self::Props,
-        event_trigger: &mut EventTrigger,
+        event_trigger: &mut EventTrigger<KnobEvents>,
     ) {
         match event.kind() {
             InputEventKind::MouseOver => {
@@ -46,7 +46,7 @@ impl Element for KnobElement {
                     let delta = (delta_x - delta_y) / 10.0;
                     let new_value = state.drag_start_value + delta;
                     let new_value = new_value.clamp(props.min_value, props.max_value);
-                    event_trigger(&format!("change:{}", new_value));
+                    event_trigger(KnobEvents::Change(new_value));
                 }
             }
         }

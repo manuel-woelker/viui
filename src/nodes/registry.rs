@@ -2,7 +2,7 @@ use crate::nodes::data::NodeData;
 use crate::nodes::descriptor::NodeDescriptor;
 use crate::nodes::elements::kind::{Element, EventTrigger};
 use crate::nodes::events::InputEvent;
-use crate::nodes::types::{EventList, NodeEventHandler, NodeProps, NodeRenderFn, NodeState};
+use crate::nodes::types::{NodeEventHandler, NodeEvents, NodeProps, NodeRenderFn, NodeState};
 use crate::render::command::RenderCommand;
 use crate::result::ViuiResult;
 use std::collections::HashMap;
@@ -31,11 +31,10 @@ impl NodeRegistry {
         name: impl Into<String>,
         make_state: impl Fn() -> ViuiResult<Box<dyn NodeState>> + Send + 'static,
         make_props: impl Fn() -> ViuiResult<Box<dyn NodeProps>> + Send + 'static,
-        event_handler: impl Fn(InputEvent, &mut NodeData, &mut EventTrigger) -> ViuiResult<()>
+        event_handler: impl Fn(InputEvent, &mut NodeData, &mut EventTrigger<Box<dyn NodeEvents>>) -> ViuiResult<()>
             + Send
             + 'static,
         render_fn: impl Fn(&mut Vec<RenderCommand>, &NodeData) -> ViuiResult<()> + Send + 'static,
-        emitted_events: EventList,
     ) {
         self.register_internal(
             name.into(),
@@ -43,7 +42,6 @@ impl NodeRegistry {
             Box::new(make_props),
             Box::new(event_handler),
             Box::new(render_fn),
-            emitted_events,
         );
     }
 
@@ -52,9 +50,8 @@ impl NodeRegistry {
         name: String,
         make_state: Box<dyn Fn() -> ViuiResult<Box<dyn NodeState>> + Send>,
         make_props: Box<dyn Fn() -> ViuiResult<Box<dyn NodeProps>> + Send>,
-        event_handler: NodeEventHandler,
+        event_handler: NodeEventHandler<Box<dyn NodeEvents>>,
         render_fn: NodeRenderFn,
-        emitted_events: EventList,
     ) {
         let kind_index = self.nodes.len();
         self.nodes.push(NodeDescriptor {
@@ -63,21 +60,23 @@ impl NodeRegistry {
             render_fn,
             make_state,
             make_props,
-            emitted_events,
         });
         self.node_map.insert(name, kind_index);
     }
 
-    pub fn register_node<T: Element>(&mut self, emitted_events: EventList) {
+    pub fn register_node<T: Element>(&mut self) {
         self.register(
             T::NAME,
             || Ok(Box::new(T::State::default())),
             || Ok(Box::new(T::Props::default())),
             Box::new(
-                |event: InputEvent, node_data: &mut NodeData, event_trigger: &mut EventTrigger| {
+                |event: InputEvent,
+                 node_data: &mut NodeData,
+                 event_trigger: &mut EventTrigger<Box<dyn NodeEvents>>| {
                     let (state, props) =
                         node_data.cast_state_mut_and_props::<T::State, T::Props>()?;
-                    T::handle_event(&event, state, props, event_trigger);
+                    let mut event_handler = |e: T::Events| event_trigger(Box::new(e));
+                    T::handle_event(&event, state, props, &mut event_handler);
                     Ok(())
                 },
             ),
@@ -88,7 +87,6 @@ impl NodeRegistry {
                     Ok(())
                 },
             ),
-            emitted_events,
         );
     }
 
@@ -105,7 +103,7 @@ impl NodeRegistry {
         node_index: usize,
         event: InputEvent,
         node_data: &mut NodeData,
-        event_trigger: &mut EventTrigger,
+        event_trigger: &mut EventTrigger<Box<dyn NodeEvents>>,
     ) -> ViuiResult<()> {
         (self.nodes[node_index].event_handler)(event, node_data, event_trigger)
     }

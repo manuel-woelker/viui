@@ -17,7 +17,7 @@ impl Element for ButtonElement {
         event: &InputEvent,
         state: &mut Self::State,
         _props: &Self::Props,
-        event_trigger: &mut EventTrigger,
+        event_trigger: &mut EventTrigger<ButtonEvents>,
     ) {
         match event.kind() {
             InputEventKind::MouseOver => {
@@ -28,7 +28,7 @@ impl Element for ButtonElement {
             }
             InputEventKind::MousePress(..) => {
                 state.is_pressed = true;
-                event_trigger("click");
+                event_trigger(ButtonEvents::Click);
             }
             InputEventKind::MouseRelease(..) => {
                 state.is_pressed = false;
