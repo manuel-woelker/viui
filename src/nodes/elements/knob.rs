@@ -1,6 +1,6 @@
 use crate::nodes::elements::kind::{Element, EventTrigger};
-use crate::nodes::events::{NodeEvent, NodeEventKind};
-use crate::nodes::types::{NodeProps, NodeState};
+use crate::nodes::events::{InputEvent, InputEventKind};
+use crate::nodes::types::{NodeEvents, NodeProps, NodeState};
 use crate::render::command::RenderCommand;
 use crate::types::{Color, Float, Point, Rect, Size};
 use bevy_reflect::Reflect;
@@ -12,32 +12,33 @@ impl Element for KnobElement {
     const NAME: &'static str = "knob";
     type State = KnobElementState;
     type Props = KnobElementProps;
+    type Events = KnobEvents;
 
     fn handle_event(
-        event: &NodeEvent,
+        event: &InputEvent,
         state: &mut Self::State,
         props: &Self::Props,
         event_trigger: &mut EventTrigger,
     ) {
         match event.kind() {
-            NodeEventKind::MouseOver => {
+            InputEventKind::MouseOver => {
                 state.is_hovering = true;
             }
-            NodeEventKind::MouseOut => {
+            InputEventKind::MouseOut => {
                 state.is_hovering = false;
             }
-            NodeEventKind::MousePress(position) => {
+            InputEventKind::MousePress(position) => {
                 state.drag_start_x = position.x;
                 state.drag_start_y = position.y;
                 state.drag_start_value = props.value;
                 state.is_pressed = true;
                 state.is_dragging = true;
             }
-            NodeEventKind::MouseRelease(..) => {
+            InputEventKind::MouseRelease(..) => {
                 state.is_pressed = false;
                 state.is_dragging = false;
             }
-            NodeEventKind::MouseMove(position) => {
+            InputEventKind::MouseMove(position) => {
                 //dbg!(position);
                 if state.is_dragging {
                     let delta_x = position.x - state.drag_start_x;
@@ -127,3 +128,9 @@ pub struct KnobElementState {
 }
 
 impl NodeState for KnobElementState {}
+
+#[derive(Reflect, Debug)]
+pub enum KnobEvents {
+    Change(Float),
+}
+impl NodeEvents for KnobEvents {}

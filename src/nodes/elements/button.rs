@@ -1,6 +1,6 @@
 use crate::nodes::elements::kind::{Element, EventTrigger};
-use crate::nodes::events::{NodeEvent, NodeEventKind};
-use crate::nodes::types::{NodeProps, NodeState};
+use crate::nodes::events::{InputEvent, InputEventKind};
+use crate::nodes::types::{NodeEvents, NodeProps, NodeState};
 use crate::render::command::RenderCommand;
 use crate::types::{Color, Point, Rect, Size};
 use bevy_reflect::Reflect;
@@ -11,25 +11,26 @@ impl Element for ButtonElement {
     const NAME: &'static str = "button";
     type State = ButtonElementState;
     type Props = ButtonElementProps;
+    type Events = ButtonEvents;
 
     fn handle_event(
-        event: &NodeEvent,
+        event: &InputEvent,
         state: &mut Self::State,
         _props: &Self::Props,
         event_trigger: &mut EventTrigger,
     ) {
         match event.kind() {
-            NodeEventKind::MouseOver => {
+            InputEventKind::MouseOver => {
                 state.is_hovering = true;
             }
-            NodeEventKind::MouseOut => {
+            InputEventKind::MouseOut => {
                 state.is_hovering = false;
             }
-            NodeEventKind::MousePress(..) => {
+            InputEventKind::MousePress(..) => {
                 state.is_pressed = true;
                 event_trigger("click");
             }
-            NodeEventKind::MouseRelease(..) => {
+            InputEventKind::MouseRelease(..) => {
                 state.is_pressed = false;
             }
             _ => {}
@@ -69,5 +70,10 @@ pub struct ButtonElementState {
     pub is_hovering: bool,
     pub is_pressed: bool,
 }
-
 impl NodeState for ButtonElementState {}
+
+#[derive(Reflect, Debug)]
+pub enum ButtonEvents {
+    Click,
+}
+impl NodeEvents for ButtonEvents {}

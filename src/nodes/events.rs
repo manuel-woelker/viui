@@ -1,12 +1,12 @@
 use crate::types::Point;
 
 #[derive(Debug)]
-pub struct NodeEvent {
-    kind: NodeEventKind,
+pub struct InputEvent {
+    kind: InputEventKind,
 }
 
 #[derive(Debug)]
-pub enum NodeEventKind {
+pub enum InputEventKind {
     MouseOver,
     MouseOut,
     MouseMove(Point),
@@ -14,35 +14,35 @@ pub enum NodeEventKind {
     MouseRelease(Point),
 }
 
-impl NodeEvent {
+impl InputEvent {
     pub fn mouse_over() -> Self {
         Self {
-            kind: NodeEventKind::MouseOver,
+            kind: InputEventKind::MouseOver,
         }
     }
     pub fn mouse_out() -> Self {
         Self {
-            kind: NodeEventKind::MouseOut,
+            kind: InputEventKind::MouseOut,
         }
     }
     pub fn mouse_press(position: Point) -> Self {
         Self {
-            kind: NodeEventKind::MousePress(position),
+            kind: InputEventKind::MousePress(position),
         }
     }
     pub fn mouse_release(position: Point) -> Self {
         Self {
-            kind: NodeEventKind::MouseRelease(position),
+            kind: InputEventKind::MouseRelease(position),
         }
     }
 
     pub fn mouse_move(position: Point) -> Self {
         Self {
-            kind: NodeEventKind::MouseMove(position),
+            kind: InputEventKind::MouseMove(position),
         }
     }
 
-    pub fn kind(&self) -> &NodeEventKind {
+    pub fn kind(&self) -> &InputEventKind {
         &self.kind
     }
 }

@@ -9,7 +9,7 @@ impl Element for LabelElement {
     const NAME: &'static str = "label";
     type State = ();
     type Props = LabelElementProps;
-
+    type Events = ();
     fn render_element(
         render_queue: &mut Vec<RenderCommand>,
         _state: &Self::State,

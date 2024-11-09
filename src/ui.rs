@@ -8,7 +8,7 @@ use crate::nodes::elements::button::ButtonElement;
 use crate::nodes::elements::kind::Element;
 use crate::nodes::elements::knob::KnobElement;
 use crate::nodes::elements::label::LabelElement;
-use crate::nodes::events::{MouseEventKind, NodeEvent, UiEvent, UiEventKind};
+use crate::nodes::events::{InputEvent, MouseEventKind, UiEvent, UiEventKind};
 use crate::nodes::registry::NodeRegistry;
 use crate::observable_state::ObservableState;
 use crate::render::command::RenderCommand;
@@ -225,20 +225,20 @@ impl UI {
 
     pub fn handle_ui_event(&mut self, event: UiEvent) -> ViuiResult<()> {
         let mut events_to_trigger = Vec::new();
-        let mut add_event_trigger = |node_idx: Idx<NodeData>, node_event: NodeEvent| {
+        let mut add_event_trigger = |node_idx: Idx<NodeData>, node_event: InputEvent| {
             events_to_trigger.push((node_idx, node_event));
         };
         match event.kind {
             UiEventKind::MouseMoved(position) => {
                 self.mouse_position = position;
                 if let Some(node) = &self.active_node {
-                    add_event_trigger(*node, NodeEvent::mouse_move(position));
+                    add_event_trigger(*node, InputEvent::mouse_move(position));
                 }
                 for (node, node_idx) in self.node_arena.entries_mut_indexed() {
                     if node.layout.bounds.contains(position) {
-                        add_event_trigger(node_idx, NodeEvent::mouse_over());
+                        add_event_trigger(node_idx, InputEvent::mouse_over());
                     } else {
-                        add_event_trigger(node_idx, NodeEvent::mouse_out());
+                        add_event_trigger(node_idx, InputEvent::mouse_out());
                     }
                 }
             }
@@ -248,9 +248,9 @@ impl UI {
                     if node.layout.bounds.contains(position) {
                         self.active_node = Some(idx);
                         if input.mouse_event_kind == MouseEventKind::Pressed {
-                            add_event_trigger(idx, NodeEvent::mouse_press(position));
+                            add_event_trigger(idx, InputEvent::mouse_press(position));
                         } else if input.mouse_event_kind == MouseEventKind::Released {
-                            add_event_trigger(idx, NodeEvent::mouse_release(position));
+                            add_event_trigger(idx, InputEvent::mouse_release(position));
                         }
                     }
                 }

@@ -1,7 +1,7 @@
 use crate::nodes::data::NodeData;
 use crate::nodes::descriptor::NodeDescriptor;
 use crate::nodes::elements::kind::{Element, EventTrigger};
-use crate::nodes::events::NodeEvent;
+use crate::nodes::events::InputEvent;
 use crate::nodes::types::{EventList, NodeEventHandler, NodeProps, NodeRenderFn, NodeState};
 use crate::render::command::RenderCommand;
 use crate::result::ViuiResult;
@@ -31,7 +31,7 @@ impl NodeRegistry {
         name: impl Into<String>,
         make_state: impl Fn() -> ViuiResult<Box<dyn NodeState>> + Send + 'static,
         make_props: impl Fn() -> ViuiResult<Box<dyn NodeProps>> + Send + 'static,
-        event_handler: impl Fn(NodeEvent, &mut NodeData, &mut EventTrigger) -> ViuiResult<()>
+        event_handler: impl Fn(InputEvent, &mut NodeData, &mut EventTrigger) -> ViuiResult<()>
             + Send
             + 'static,
         render_fn: impl Fn(&mut Vec<RenderCommand>, &NodeData) -> ViuiResult<()> + Send + 'static,
@@ -74,7 +74,7 @@ impl NodeRegistry {
             || Ok(Box::new(T::State::default())),
             || Ok(Box::new(T::Props::default())),
             Box::new(
-                |event: NodeEvent, node_data: &mut NodeData, event_trigger: &mut EventTrigger| {
+                |event: InputEvent, node_data: &mut NodeData, event_trigger: &mut EventTrigger| {
                     let (state, props) =
                         node_data.cast_state_mut_and_props::<T::State, T::Props>()?;
                     T::handle_event(&event, state, props, event_trigger);
@@ -103,7 +103,7 @@ impl NodeRegistry {
     pub fn handle_event(
         &self,
         node_index: usize,
-        event: NodeEvent,
+        event: InputEvent,
         node_data: &mut NodeData,
         event_trigger: &mut EventTrigger,
     ) -> ViuiResult<()> {
