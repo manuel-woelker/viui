@@ -62,7 +62,7 @@ impl PartialEq for ExpressionValue {
         match (self, other) {
             (ExpressionValue::Float(left), ExpressionValue::Float(right)) => left == right,
             (ExpressionValue::String(left), ExpressionValue::String(right)) => left == right,
-            (ExpressionValue::Reflect(left), ExpressionValue::Reflect(right)) => false,
+            (ExpressionValue::Reflect(_left), ExpressionValue::Reflect(_right)) => false,
             _ => false,
         }
     }
@@ -81,7 +81,7 @@ impl ExpressionValue {
         match self {
             ExpressionValue::Float(value) => Box::new(*value),
             ExpressionValue::String(value) => Box::new(value.clone()),
-            ExpressionValue::Reflect(reflect) => todo!("Reflect clone"),
+            ExpressionValue::Reflect(_reflect) => todo!("Reflect clone"),
             ExpressionValue::Function(_) => todo!("Function as reflect"),
         }
     }

@@ -2,8 +2,7 @@ use crate::arenal::{Arenal, Idx};
 use crate::component::ast::{ComponentAst, ExpressionAst};
 use crate::component::eval::eval;
 use crate::component::parser::parse_ui;
-use crate::component::value::{ExpressionValue, FunctionValue};
-use crate::model::ComponentNode;
+use crate::component::value::ExpressionValue;
 use crate::nodes::data::{LayoutInfo, NodeData, PropExpression};
 use crate::nodes::elements::button::ButtonElement;
 use crate::nodes::elements::kind::Element;
@@ -87,12 +86,12 @@ impl UI {
                     );
                 };
                 match variant_info {
-                    VariantInfo::Unit(unit_info) => {
+                    VariantInfo::Unit(_unit_info) => {
                         let dynamic_enum = DynamicEnum::new(variant_name, DynamicVariant::Unit);
                         let message = MESSAGE::from_reflect(&dynamic_enum).unwrap();
                         Ok(ExpressionValue::Reflect(Arc::new(message)))
                     }
-                    VariantInfo::Tuple(tuple_info) => {
+                    VariantInfo::Tuple(_tuple_info) => {
                         let variant_name = variant_name.to_string();
                         Ok(ExpressionValue::function(
                             variant_name.clone(),
@@ -112,9 +111,6 @@ impl UI {
                         todo!("Implement struct enum variant");
                     }
                 }
-                //                let mut message_string = String::new();
-                //                let message = ron::de::from_str::<MESSAGE>(message_string)?;
-                //                Ok(Box::new(message))
             });
         let file_watcher = new_debouncer(
             Duration::from_millis(10),
@@ -455,7 +451,7 @@ fn eval_expression(
     expression: &ExpressionAst,
     lookup: &dyn Fn(&str) -> ViuiResult<Option<ExpressionValue>>,
 ) -> ViuiResult<ExpressionValue> {
-    let value = eval(&expression, &|name| {
+    let value = eval(expression, &|name| {
         if let Some(value) = lookup(name)? {
             return Ok(value);
         }

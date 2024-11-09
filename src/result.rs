@@ -151,11 +151,11 @@ mod tests {
 
     #[test]
     fn test_context_macro_ok() {
-        let _result = (|| -> ViuiResult<u32> {
+        let _result = {
             context!("grok stuff for {}", "bar" => {
                 Ok(0)
             })
-        })()
+        }
         .unwrap();
     }
 
@@ -164,11 +164,11 @@ mod tests {
         fn my_broken_function() -> ViuiResult<u32> {
             Err("ungrokkable")?
         }
-        let result = (|| -> ViuiResult<u32> {
+        let result = {
             context!("grok stuff for {}", "bar" => {
                 my_broken_function()
             })
-        })()
+        }
         .expect_err("Should have errored, but was");
         assert_eq!(
             "General Error: Failed to grok stuff for bar",

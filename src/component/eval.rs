@@ -32,7 +32,7 @@ impl<'a> Evaluator<'a> {
                 Ok(ExpressionValue::String(result))
             }
             ExpressionKind::Call { callee, arguments } => {
-                let mut callee = self.eval(callee)?;
+                let callee = self.eval(callee)?;
                 let ExpressionValue::Function(function) = callee else {
                     bail!("Not a function: {}", callee);
                 };

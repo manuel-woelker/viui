@@ -2,6 +2,7 @@ component CounterComponent {
 	label(label=`Counter: ${counter}`)
 	button(label="Increment" @click=Increment)
 	button(label="Decrement" @click=Decrement)
+	label(label=`Gain: ${gain}`)
 	button(label="Reset gain" @click=Set(0))
 	knob(
 		min_value=0
