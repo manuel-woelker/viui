@@ -39,14 +39,13 @@ impl Element for KnobElement {
                 state.is_dragging = false;
             }
             InputEventKind::MouseMove(position) => {
-                //dbg!(position);
                 if state.is_dragging {
                     let delta_x = position.x - state.drag_start_x;
                     let delta_y = position.y - state.drag_start_y;
                     let delta = (delta_x - delta_y) / 10.0;
                     let new_value = state.drag_start_value + delta;
                     let new_value = new_value.clamp(props.min_value, props.max_value);
-                    event_trigger(KnobEvents::Change(new_value));
+                    event_trigger(KnobEvents::Change { new_value });
                 }
             }
         }
@@ -131,6 +130,6 @@ impl NodeState for KnobElementState {}
 
 #[derive(Reflect, Debug)]
 pub enum KnobEvents {
-    Change(Float),
+    Change { new_value: Float },
 }
 impl NodeEvents for KnobEvents {}

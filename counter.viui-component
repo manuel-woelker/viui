@@ -9,6 +9,6 @@ component CounterComponent {
 		max_value=10
 		value=gain
 		label="Gain"
-		@change=Set(value)
+		@change=Set(new_value)
 	)
 }

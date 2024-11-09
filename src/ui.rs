@@ -280,15 +280,14 @@ impl UI {
                         &self.message_string_to_enum_converter,
                         message_expression,
                         &|name| {
-                            Ok(if name == "value" {
-                                let value = dyn_enum.field_at(0).unwrap().clone_value();
-                                if let Some(value) = value.downcast_ref::<Float>() {
+                            Ok(if let Some(field) = dyn_enum.field(name) {
+                                if let Some(value) = field.downcast_ref::<Float>() {
                                     Some(ExpressionValue::Float(*value))
                                 } else {
                                     bail!(
                                         "Could not convert value to expression value: {:?} {}",
-                                        value,
-                                        value.reflect_short_type_path()
+                                        field,
+                                        field.reflect_short_type_path()
                                     );
                                 }
                             } else {
