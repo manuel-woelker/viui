@@ -14,7 +14,7 @@ use crate::nodes::types::NodeEvents;
 use crate::observable_state::ObservableState;
 use crate::render::command::RenderCommand;
 use crate::result::{context, ViuiResult};
-use crate::types::{Float, Point, Rect, Size};
+use crate::types::{Point, Rect, Size};
 use crate::{bail, err};
 use bevy_reflect::{
     DynamicEnum, DynamicTuple, DynamicVariant, FromReflect, GetPath, Reflect, ReflectRef, TypeInfo,
@@ -281,15 +281,7 @@ impl UI {
                         message_expression,
                         &|name| {
                             Ok(if let Some(field) = dyn_enum.field(name) {
-                                if let Some(value) = field.downcast_ref::<Float>() {
-                                    Some(ExpressionValue::Float(*value))
-                                } else {
-                                    bail!(
-                                        "Could not convert value to expression value: {:?} {}",
-                                        field,
-                                        field.reflect_short_type_path()
-                                    );
-                                }
+                                Some(field.try_into()?)
                             } else {
                                 None
                             })
@@ -299,32 +291,7 @@ impl UI {
                 } else {
                     bail!("No event mapping found for event: {:?}", event);
                 }
-                //dbg!(&event.as_reflect().downcast_ref::<dyn bevy_reflect::Enum>());
-                /*                let (event_name, value) = event.split_once(":").unwrap_or((&event, ""));
-                if let Some(message_expression) = node.event_mappings.get(event_name) {
-                    let result = eval_expression(
-                        self.app_state.state(),
-                        &self.message_string_to_enum_converter,
-                        message_expression,
-                        &|name| {
-                            Ok(if name == "value" {
-                                Some(ExpressionValue::Float(value.parse()?))
-                            } else {
-                                None
-                            })
-                        },
-                    )?;
-                    (self.event_handler)(self.app_state.as_mut(), result.as_reflect());
-                } else {
-                    bail!("No event mapping found for event: {}", event);
-                }*/
             }
-            /*            // Found clicked node
-            if let Some(message) = node.event_mappings.get(event) {
-                (self.event_handler)(self.app_state.as_mut(), message.as_ref());
-            } else {
-                bail!("No event mapping found for event: {}", event);
-            }*/
         }
         Ok(())
     }

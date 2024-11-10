@@ -1,4 +1,5 @@
-use crate::result::ViuiResult;
+use crate::bail;
+use crate::result::{ViuiError, ViuiResult};
 use crate::types::Float;
 use bevy_reflect::Reflect;
 use std::fmt::{Debug, Display};
@@ -27,6 +28,22 @@ impl ExpressionValue {
         ExpressionValue::Function(FunctionValue {
             name,
             fun: Arc::new(fun),
+        })
+    }
+}
+
+impl TryFrom<&dyn Reflect> for ExpressionValue {
+    type Error = ViuiError;
+
+    fn try_from(value: &dyn Reflect) -> ViuiResult<Self> {
+        Ok(if let Some(value) = value.downcast_ref::<Float>() {
+            ExpressionValue::Float(*value)
+        } else {
+            bail!(
+                "Could not convert value to expression value: {:?} {}",
+                value,
+                value.reflect_short_type_path()
+            );
         })
     }
 }
