@@ -64,14 +64,56 @@ pub struct RenderBackendMessage {
     pub(crate) render_commands: Vec<RenderCommand>,
 }
 
+pub trait AppMessage: DeserializeOwned + Reflect + FromReflect + Debug + Sized + Typed {}
+impl<T> AppMessage for T where T: DeserializeOwned + Reflect + FromReflect + Debug + Sized + Typed {}
+
 impl UI {
-    pub fn new<MESSAGE: DeserializeOwned + Reflect + FromReflect + Debug + Sized + Typed>(
+    pub fn new<MESSAGE: AppMessage>(
         state: ObservableState,
         root_component_name: String,
         event_handler: impl Fn(&mut ObservableState, &MESSAGE) + Send + 'static,
     ) -> ViuiResult<UI> {
         let (event_sender, event_receiver) = crossbeam_channel::bounded::<UiEvent>(4);
         let (file_change_sender, file_change_receiver) = crossbeam_channel::bounded::<()>(4);
+        let message_string_to_enum_converter = Self::make_enum_variant_for_name::<MESSAGE>();
+        let file_watcher = new_debouncer(
+            Duration::from_millis(10),
+            move |res: DebounceEventResult| match res {
+                Ok(_events) => {
+                    if let Err(err) = file_change_sender.send(()) {
+                        error!("File watcher error {:?}", err)
+                    }
+                }
+                Err(err) => error!("File watcher error {:?}", err),
+            },
+        )?;
+
+        let mut node_registry = NodeRegistry::new();
+        node_registry.register_node::<LabelElement>();
+        node_registry.register_node::<ButtonElement>();
+        node_registry.register_node::<KnobElement>();
+        Ok(UI {
+            root_component_name,
+            node_registry,
+            node_arena: Arenal::new(),
+            app_state: Box::new(state),
+            event_handler: Box::new(move |state, message| {
+                let typed_message = message.downcast_ref::<MESSAGE>().unwrap();
+                event_handler(state, typed_message);
+            }),
+            mouse_position: Default::default(),
+            render_backends: Vec::new(),
+            ui_event_receiver: event_receiver,
+            ui_event_sender: event_sender,
+            message_string_to_enum_converter,
+            file_change_receiver,
+            file_watcher,
+            root_node_file: Default::default(),
+            active_node: Default::default(),
+        })
+    }
+
+    fn make_enum_variant_for_name<MESSAGE: AppMessage>() -> MessageStringToEnumConverter {
         let message_string_to_enum_converter =
             Box::new(|variant_name: &str| -> ViuiResult<ExpressionValue> {
                 let type_info = MESSAGE::type_info();
@@ -113,41 +155,7 @@ impl UI {
                     }
                 }
             });
-        let file_watcher = new_debouncer(
-            Duration::from_millis(10),
-            move |res: DebounceEventResult| match res {
-                Ok(_events) => {
-                    if let Err(err) = file_change_sender.send(()) {
-                        error!("File watcher error {:?}", err)
-                    }
-                }
-                Err(err) => error!("File watcher error {:?}", err),
-            },
-        )?;
-
-        let mut node_registry = NodeRegistry::new();
-        node_registry.register_node::<LabelElement>();
-        node_registry.register_node::<ButtonElement>();
-        node_registry.register_node::<KnobElement>();
-        Ok(UI {
-            root_component_name,
-            node_registry,
-            node_arena: Arenal::new(),
-            app_state: Box::new(state),
-            event_handler: Box::new(move |state, message| {
-                let typed_message = message.downcast_ref::<MESSAGE>().unwrap();
-                event_handler(state, typed_message);
-            }),
-            mouse_position: Default::default(),
-            render_backends: Vec::new(),
-            ui_event_receiver: event_receiver,
-            ui_event_sender: event_sender,
-            message_string_to_enum_converter,
-            file_change_receiver,
-            file_watcher,
-            root_node_file: Default::default(),
-            active_node: Default::default(),
-        })
+        message_string_to_enum_converter
     }
 
     pub fn start(mut self) -> ViuiResult<()> {
