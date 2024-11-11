@@ -245,6 +245,14 @@ fn render<T: Renderer>(
             RenderCommand::SetStrokeWidth(width) => {
                 stroke_paint.set_line_width(*width);
             }
+            RenderCommand::ClipRect(clip_rect) => {
+                canvas.scissor(
+                    clip_rect.origin.x,
+                    clip_rect.origin.y,
+                    clip_rect.size.width,
+                    clip_rect.size.height,
+                );
+            }
         }
     }
 

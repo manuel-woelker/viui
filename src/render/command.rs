@@ -30,4 +30,5 @@ pub enum RenderCommand {
     },
     ResetTransform,
     DrawText(String),
+    ClipRect(Rect),
 }

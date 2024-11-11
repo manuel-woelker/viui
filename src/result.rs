@@ -93,6 +93,13 @@ impl From<bevy_reflect::ReflectPathError<'_>> for ViuiError {
     }
 }
 
+impl From<taffy::TaffyError> for ViuiError {
+    #[track_caller]
+    fn from(error: taffy::TaffyError) -> Self {
+        Self::new(ViuiErrorKind::General(error.to_string()))
+    }
+}
+
 impl From<String> for ViuiErrorKind {
     #[track_caller]
     fn from(error: String) -> Self {

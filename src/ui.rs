@@ -34,6 +34,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
+use taffy::prelude::length;
+use taffy::{FlexDirection, Style, TaffyTree};
 use tracing::error;
 
 pub type ApplicationEventHandler = Box<dyn Fn(&mut ObservableState, &dyn Reflect) + Send>;
@@ -189,7 +191,7 @@ impl UI {
 
     pub fn redraw(&mut self) -> ViuiResult<()> {
         self.eval_expressions()?;
-        self.perform_layout();
+        self.perform_layout()?;
         let render_backends = take(&mut self.render_backends);
         for backend in &render_backends {
             let render_commands = self.make_render_commands()?;
@@ -359,26 +361,57 @@ impl UI {
         Ok(())
     }
 
-    pub fn perform_layout(&mut self) {
+    pub fn perform_layout(&mut self) -> ViuiResult<()> {
         let node_height = 80.0;
         let node_width = 200.0;
-        let mut current_y = 0.0f32;
-        for node in self.node_arena.entries_mut() {
-            node.layout.bounds = Rect::new(
-                Point::new(0.0, current_y),
-                Size::new(node_width, node_height),
-            );
-            current_y += node_height;
+        let mut tree: TaffyTree<()> = TaffyTree::new();
+        let mut layout_nodes = vec![];
+        for _node in self.node_arena.entries() {
+            let layout_node = tree.new_leaf(Style {
+                size: taffy::Size {
+                    width: length(node_width),
+                    height: length(node_height),
+                },
+                ..Default::default()
+            })?;
+            layout_nodes.push(layout_node);
         }
+        let root_node = tree.new_with_children(
+            Style {
+                flex_direction: FlexDirection::Column,
+                size: taffy::Size {
+                    width: length(800.0),
+                    height: length(600.0),
+                },
+                ..Default::default()
+            },
+            &layout_nodes,
+        )?;
+        tree.compute_layout(root_node, taffy::Size::max_content())?;
+        for (node, layout_node) in self.node_arena.entries_mut().zip(layout_nodes) {
+            let layout = tree.layout(layout_node)?;
+            node.layout.bounds = Rect::new(
+                Point::new(layout.location.x, layout.location.y),
+                Size::new(layout.size.width, layout.size.height),
+            );
+        }
+        Ok(())
     }
 
     pub fn make_render_commands(&self) -> ViuiResult<Vec<RenderCommand>> {
         let mut render_commands: Vec<RenderCommand> = Vec::new();
         for node in self.node_arena.entries() {
             render_commands.push(RenderCommand::Save);
+            render_commands.push(RenderCommand::ClipRect(Rect::new(
+                Point::new(0.0, 0.0),
+                node.layout.bounds.size,
+            )));
             self.node_registry.render_node(&mut render_commands, node)?;
             render_commands.push(RenderCommand::Restore);
-            render_commands.push(RenderCommand::Translate { x: 0.0, y: 80.0 })
+            render_commands.push(RenderCommand::Translate {
+                x: 0.0,
+                y: node.layout.bounds.size.height,
+            });
         }
         Ok(render_commands)
     }
