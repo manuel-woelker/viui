@@ -1,6 +1,8 @@
 use crate::nodes::events::InputEvent;
 use crate::nodes::types::{NodeEvents, NodeProps, NodeState};
 use crate::render::command::RenderCommand;
+use crate::result::ViuiResult;
+use crate::types::Float;
 use bevy_reflect::Reflect;
 
 pub type EventTrigger<'a, E> = dyn FnMut(E) + 'a;
@@ -23,6 +25,12 @@ pub trait Element {
         state: &Self::State,
         props: &Self::Props,
     );
+
+    fn layout_element(state: &Self::State, props: &Self::Props) -> ViuiResult<LayoutConstraints>;
+}
+
+pub enum LayoutConstraints {
+    FixedLayout { width: Float, height: Float },
 }
 
 #[derive(Debug, Reflect)]

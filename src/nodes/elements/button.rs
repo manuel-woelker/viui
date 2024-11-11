@@ -1,7 +1,8 @@
-use crate::nodes::elements::kind::{Element, EventTrigger};
+use crate::nodes::elements::kind::{Element, EventTrigger, LayoutConstraints};
 use crate::nodes::events::{InputEvent, InputEventKind};
 use crate::nodes::types::{NodeEvents, NodeProps, NodeState};
 use crate::render::command::RenderCommand;
+use crate::result::ViuiResult;
 use crate::types::{Color, Point, Rect, Size};
 use bevy_reflect::Reflect;
 
@@ -55,6 +56,13 @@ impl Element for ButtonElement {
         });
         render_queue.push(RenderCommand::Translate { x: 10.0, y: 20.0 });
         render_queue.push(RenderCommand::DrawText(props.label.clone()));
+    }
+
+    fn layout_element(_state: &Self::State, _props: &Self::Props) -> ViuiResult<LayoutConstraints> {
+        Ok(LayoutConstraints::FixedLayout {
+            width: 200.0,
+            height: 40.0,
+        })
     }
 }
 

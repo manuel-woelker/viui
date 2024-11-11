@@ -1,6 +1,6 @@
 use crate::nodes::data::NodeData;
-use crate::nodes::descriptor::NodeDescriptor;
-use crate::nodes::elements::kind::{Element, EventTrigger};
+use crate::nodes::descriptor::{LayoutFn, NodeDescriptor};
+use crate::nodes::elements::kind::{Element, EventTrigger, LayoutConstraints};
 use crate::nodes::events::InputEvent;
 use crate::nodes::types::{NodeEventHandler, NodeEvents, NodeProps, NodeRenderFn, NodeState};
 use crate::render::command::RenderCommand;
@@ -35,6 +35,7 @@ impl NodeRegistry {
             + Send
             + 'static,
         render_fn: impl Fn(&mut Vec<RenderCommand>, &NodeData) -> ViuiResult<()> + Send + 'static,
+        layout_fn: impl Fn(&NodeData) -> ViuiResult<LayoutConstraints> + Send + 'static,
     ) {
         self.register_internal(
             name.into(),
@@ -42,6 +43,7 @@ impl NodeRegistry {
             Box::new(make_props),
             Box::new(event_handler),
             Box::new(render_fn),
+            Box::new(layout_fn),
         );
     }
 
@@ -52,6 +54,7 @@ impl NodeRegistry {
         make_props: Box<dyn Fn() -> ViuiResult<Box<dyn NodeProps>> + Send>,
         event_handler: NodeEventHandler<Box<dyn NodeEvents>>,
         render_fn: NodeRenderFn,
+        layout_fn: LayoutFn,
     ) {
         let kind_index = self.nodes.len();
         self.nodes.push(NodeDescriptor {
@@ -60,6 +63,7 @@ impl NodeRegistry {
             render_fn,
             make_state,
             make_props,
+            layout_fn,
         });
         self.node_map.insert(name, kind_index);
     }
@@ -87,6 +91,10 @@ impl NodeRegistry {
                     Ok(())
                 },
             ),
+            Box::new(|node_data: &NodeData| {
+                let (state, props) = node_data.cast_state_and_props::<T::State, T::Props>()?;
+                T::layout_element(state, props)
+            }),
         );
     }
 
@@ -118,5 +126,8 @@ impl NodeRegistry {
         node_data: &NodeData,
     ) -> ViuiResult<()> {
         (self.nodes[node_data.kind_index()].render_fn)(render_queue, node_data)
+    }
+    pub fn layout_node(&self, node_data: &NodeData) -> ViuiResult<LayoutConstraints> {
+        (self.nodes[node_data.kind_index()].layout_fn)(node_data)
     }
 }

@@ -5,7 +5,7 @@ use crate::component::parser::parse_ui;
 use crate::component::value::ExpressionValue;
 use crate::nodes::data::{LayoutInfo, NodeData, PropExpression};
 use crate::nodes::elements::button::ButtonElement;
-use crate::nodes::elements::kind::Element;
+use crate::nodes::elements::kind::{Element, LayoutConstraints};
 use crate::nodes::elements::knob::KnobElement;
 use crate::nodes::elements::label::LabelElement;
 use crate::nodes::events::{InputEvent, MouseEventKind, UiEvent, UiEventKind};
@@ -362,19 +362,22 @@ impl UI {
     }
 
     pub fn perform_layout(&mut self) -> ViuiResult<()> {
-        let node_height = 80.0;
-        let node_width = 200.0;
         let mut tree: TaffyTree<()> = TaffyTree::new();
         let mut layout_nodes = vec![];
-        for _node in self.node_arena.entries() {
-            let layout_node = tree.new_leaf(Style {
-                size: taffy::Size {
-                    width: length(node_width),
-                    height: length(node_height),
-                },
-                ..Default::default()
-            })?;
-            layout_nodes.push(layout_node);
+        for node in self.node_arena.entries() {
+            let layout_contraints = self.node_registry.layout_node(node)?;
+            match layout_contraints {
+                LayoutConstraints::FixedLayout { width, height } => {
+                    let layout_node = tree.new_leaf(Style {
+                        size: taffy::Size {
+                            width: length(width),
+                            height: length(height),
+                        },
+                        ..Default::default()
+                    })?;
+                    layout_nodes.push(layout_node);
+                }
+            }
         }
         let root_node = tree.new_with_children(
             Style {

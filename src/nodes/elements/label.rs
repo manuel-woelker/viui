@@ -1,6 +1,7 @@
-use crate::nodes::elements::kind::{Element, NoEvents};
+use crate::nodes::elements::kind::{Element, LayoutConstraints, NoEvents};
 use crate::nodes::types::NodeProps;
 use crate::render::command::RenderCommand;
+use crate::result::ViuiResult;
 use bevy_reflect::Reflect;
 
 pub struct LabelElement {}
@@ -17,6 +18,13 @@ impl Element for LabelElement {
     ) {
         render_queue.push(RenderCommand::Translate { x: 10.0, y: 20.0 });
         render_queue.push(RenderCommand::DrawText(props.label.clone()));
+    }
+
+    fn layout_element(_state: &Self::State, _props: &Self::Props) -> ViuiResult<LayoutConstraints> {
+        Ok(LayoutConstraints::FixedLayout {
+            width: 200.0,
+            height: 40.0,
+        })
     }
 }
 
