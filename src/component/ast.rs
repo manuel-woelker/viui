@@ -1,5 +1,6 @@
 use crate::component::span::Span;
 use crate::component::value::ExpressionValue;
+use std::ops::{Deref, DerefMut};
 use termtree::Tree;
 
 #[derive(Debug)]
@@ -22,6 +23,21 @@ impl<T> AstNode<T> {
         self.data
     }
 }
+
+impl<T> Deref for AstNode<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl<T> DerefMut for AstNode<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.data
+    }
+}
+
 pub type UIAst = AstNode<UIDefinition>;
 
 #[derive(Debug)]
@@ -109,7 +125,7 @@ fn expression_ast_to_tree(ast: &ExpressionAst) -> Tree<String> {
 
 fn ui_ast_to_tree(ast: &UIAst) -> Tree<String> {
     let mut tree = Tree::new("UIDefinition".to_string());
-    for component in &ast.data.components {
+    for component in &ast.components {
         tree.push(component_ast_to_tree(component));
     }
     tree
@@ -117,7 +133,7 @@ fn ui_ast_to_tree(ast: &UIAst) -> Tree<String> {
 
 fn component_ast_to_tree(component: &ComponentAst) -> Tree<String> {
     let mut tree = Tree::new(format!("Component {}", component.data.name));
-    for child in &component.data.children {
+    for child in &component.children {
         tree.push(node_ast_to_tree(child));
     }
     tree
@@ -125,12 +141,12 @@ fn component_ast_to_tree(component: &ComponentAst) -> Tree<String> {
 
 fn node_ast_to_tree(node_definition: &NodeAst) -> Tree<String> {
     let mut tree = Tree::new(format!("Node {}", node_definition.data.tag));
-    for prop in &node_definition.data.props {
+    for prop in &node_definition.props {
         let mut prop_tree = prop_ast_to_tree(prop);
         prop_tree.root += "=";
         tree.push(prop_tree);
     }
-    for event in &node_definition.data.events {
+    for event in &node_definition.events {
         let mut event_tree = prop_ast_to_tree(event);
         event_tree.root.insert(0, '@');
         event_tree.root += "=";
@@ -140,7 +156,7 @@ fn node_ast_to_tree(node_definition: &NodeAst) -> Tree<String> {
 }
 
 fn prop_ast_to_tree(prop_definition: &PropAst) -> Tree<String> {
-    let mut tree = Tree::new(prop_definition.data.name.clone());
-    tree.push(expression_ast_to_tree(&prop_definition.data.expression));
+    let mut tree = Tree::new(prop_definition.name.clone());
+    tree.push(expression_ast_to_tree(&prop_definition.expression));
     tree
 }

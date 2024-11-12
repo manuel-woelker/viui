@@ -2,6 +2,7 @@ use crate::bail;
 use crate::component::ast::{ExpressionAst, ExpressionKind};
 use crate::component::value::ExpressionValue;
 use crate::result::ViuiResult;
+use std::ops::Deref;
 
 type VarLookUp<'a> = dyn Fn(&str) -> ViuiResult<ExpressionValue> + 'a;
 
@@ -16,7 +17,7 @@ struct Evaluator<'a> {
 
 impl<'a> Evaluator<'a> {
     pub fn eval(&self, expression: &ExpressionAst) -> ViuiResult<ExpressionValue> {
-        match expression.data() {
+        match expression.deref() {
             ExpressionKind::Literal(value) => Ok(value.clone()),
             ExpressionKind::VarUse(name) => (self.var_lookup)(name),
             ExpressionKind::StringTemplate {

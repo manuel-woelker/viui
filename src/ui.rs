@@ -461,7 +461,7 @@ impl UI {
             let mut string = String::new();
             File::open(&self.root_node_file)?.read_to_string(&mut string)?;
             let ast = parse_ui(&string)?;
-            let root_component= ast.into_data().components.into_iter().find(|candidate| candidate.data().name == self.root_component_name).ok_or_else(|| err!("Could not find root component: {:?}", self.root_component_name))?;
+            let root_component= ast.into_data().components.into_iter().find(|candidate| candidate.name == self.root_component_name).ok_or_else(|| err!("Could not find root component: {:?}", self.root_component_name))?;
             //let model: ComponentNode = serde_yml::from_reader(File::open(&self.root_node_file)?)?;
             self.set_root_node(root_component)?;
             Ok(())
@@ -471,7 +471,7 @@ impl UI {
     pub fn set_root_node(&mut self, root: ComponentAst) -> ViuiResult<()> {
         self.node_arena.clear();
         for child in root.into_data().children {
-            let node_idx = self.add_node(&child.data().tag)?;
+            let node_idx = self.add_node(&child.tag)?;
             let child_data = child.into_data();
             for prop in child_data.props {
                 let prop_data = prop.into_data();
