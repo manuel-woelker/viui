@@ -1,3 +1,5 @@
+use crate::component::ast::NodeAst;
+use crate::err;
 use crate::nodes::data::NodeData;
 use crate::nodes::descriptor::{LayoutFn, NodeDescriptor};
 use crate::nodes::elements::kind::{Element, EventTrigger, LayoutConstraints};
@@ -36,6 +38,7 @@ impl NodeRegistry {
             + 'static,
         render_fn: impl Fn(&mut Vec<RenderCommand>, &NodeData) -> ViuiResult<()> + Send + 'static,
         layout_fn: impl Fn(&NodeData) -> ViuiResult<LayoutConstraints> + Send + 'static,
+        children: Vec<NodeAst>,
     ) {
         self.register_internal(
             name.into(),
@@ -44,6 +47,7 @@ impl NodeRegistry {
             Box::new(event_handler),
             Box::new(render_fn),
             Box::new(layout_fn),
+            children,
         );
     }
 
@@ -55,6 +59,7 @@ impl NodeRegistry {
         event_handler: NodeEventHandler<Box<dyn NodeEvents>>,
         render_fn: NodeRenderFn,
         layout_fn: LayoutFn,
+        children: Vec<NodeAst>,
     ) {
         let kind_index = self.nodes.len();
         self.nodes.push(NodeDescriptor {
@@ -64,6 +69,7 @@ impl NodeRegistry {
             make_state,
             make_props,
             layout_fn,
+            children,
         });
         self.node_map.insert(name, kind_index);
     }
@@ -95,15 +101,19 @@ impl NodeRegistry {
                 let (state, props) = node_data.cast_state_and_props::<T::State, T::Props>()?;
                 T::layout_element(state, props)
             }),
+            vec![],
         );
     }
 
-    pub fn get_node_by_name(&self, name: &str) -> &NodeDescriptor {
-        &self.nodes[*self.node_map.get(name).unwrap()]
+    pub fn get_node_by_name(&self, name: &str) -> ViuiResult<&NodeDescriptor> {
+        Ok(&self.nodes[*self
+            .node_map
+            .get(name)
+            .ok_or_else(|| err!("Could not find node: {}", name))?])
     }
 
     pub fn make_node_props(&self, name: &str) -> ViuiResult<Box<dyn NodeProps>> {
-        (self.get_node_by_name(name).make_props)()
+        (self.get_node_by_name(name)?.make_props)()
     }
 
     pub fn handle_event(

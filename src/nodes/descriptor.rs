@@ -1,3 +1,4 @@
+use crate::component::ast::NodeAst;
 use crate::nodes::data::NodeData;
 use crate::nodes::elements::kind::LayoutConstraints;
 use crate::nodes::types::{NodeEventHandler, NodeEvents, NodeProps, NodeState};
@@ -14,4 +15,5 @@ pub struct NodeDescriptor {
     pub event_handler: NodeEventHandler<Box<dyn NodeEvents>>,
     pub layout_fn: LayoutFn,
     pub render_fn: NodeRenderFn,
+    pub children: Vec<NodeAst>,
 }

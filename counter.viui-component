@@ -1,4 +1,5 @@
 component CounterComponent {
+	LabelComponent()
 	label(label=`Counter: ${counter}`)
 	button(label="Increment" @click=Increment)
 	button(label="Decrement" @click=Decrement)
@@ -11,4 +12,8 @@ component CounterComponent {
 		label="Gain"
 		@change=Set(new_value)
 	)
+}
+
+component LabelComponent {
+	label(label=`Counter: ${counter}`)
 }

@@ -1,4 +1,5 @@
 use crate::arenal::{Arenal, Idx};
+use crate::bail;
 use crate::component::ast::{ComponentAst, ExpressionAst};
 use crate::component::eval::eval;
 use crate::component::parser::parse_ui;
@@ -15,7 +16,6 @@ use crate::observable_state::ObservableState;
 use crate::render::command::RenderCommand;
 use crate::result::{context, ViuiResult};
 use crate::types::{Point, Rect, Size};
-use crate::{bail, err};
 use bevy_reflect::{
     DynamicEnum, DynamicTuple, DynamicVariant, FromReflect, GetPath, Reflect, ReflectRef, TypeInfo,
     Typed, VariantInfo,
@@ -45,6 +45,7 @@ pub struct UI {
     root_component_name: String,
     node_registry: NodeRegistry,
     node_arena: Arenal<NodeData>,
+    root_node_idx: Idx<NodeData>,
     app_state: Box<ObservableState>,
     event_handler: ApplicationEventHandler,
     message_string_to_enum_converter: MessageStringToEnumConverter,
@@ -112,6 +113,7 @@ impl UI {
             file_watcher,
             root_node_file: Default::default(),
             active_node: Default::default(),
+            root_node_idx: Default::default(),
         })
     }
 
@@ -216,18 +218,6 @@ impl UI {
         });
         self.redraw()?;
         Ok(message_receiver)
-    }
-
-    pub fn add_node(&mut self, kind: &str) -> ViuiResult<Idx<NodeData>> {
-        let node_descriptor = self.node_registry.get_node_by_name(kind);
-        Ok(self.node_arena.insert(NodeData {
-            kind_index: node_descriptor.kind_index,
-            state: (node_descriptor.make_state)()?,
-            props: (node_descriptor.make_props)()?,
-            layout: LayoutInfo::default(),
-            prop_expressions: Vec::new(),
-            event_mappings: Default::default(),
-        }))
     }
 
     pub fn nodes(&mut self) -> impl Iterator<Item = &mut NodeData> {
@@ -461,16 +451,21 @@ impl UI {
             let mut string = String::new();
             File::open(&self.root_node_file)?.read_to_string(&mut string)?;
             let ast = parse_ui(&string)?;
-            let root_component= ast.into_data().components.into_iter().find(|candidate| candidate.name == self.root_component_name).ok_or_else(|| err!("Could not find root component: {:?}", self.root_component_name))?;
+            let ast_data = ast.into_data();
+            for component in &ast_data.components {
+                self.register_component_node(&component);
+            }
+            //let root_component= ast_data.components.into_iter().find(|candidate| candidate.name == self.root_component_name).ok_or_else(|| err!("Could not find root component: {:?}", self.root_component_name))?;
             //let model: ComponentNode = serde_yml::from_reader(File::open(&self.root_node_file)?)?;
-            self.set_root_node(root_component)?;
+            self.set_root_node()?;
             Ok(())
         })
     }
 
-    pub fn set_root_node(&mut self, root: ComponentAst) -> ViuiResult<()> {
+    pub fn set_root_node(&mut self) -> ViuiResult<()> {
         self.node_arena.clear();
-        for child in root.into_data().children {
+        self.root_node_idx = self.create_node(&self.root_component_name.to_string())?;
+        /*        for child in root.into_data().children {
             let node_idx = self.add_node(&child.tag)?;
             let child_data = child.into_data();
             for prop in child_data.props {
@@ -481,8 +476,51 @@ impl UI {
                 let event_data = event.into_data();
                 self.set_event_mapping(&node_idx, &event_data.name, event_data.expression);
             }
-        }
+        }*/
         Ok(())
+    }
+
+    pub fn create_node(&mut self, name: &str) -> ViuiResult<Idx<NodeData>> {
+        let component = self.node_registry.get_node_by_name(name)?;
+        let kind_index = component.kind_index;
+        let mut children = vec![];
+        for child in &component.children.clone() {
+            let node_idx = self.create_node(&child.tag)?;
+            for prop in &child.props {
+                self.set_node_prop(&node_idx, &prop.name, prop.expression.clone());
+            }
+            for event in &child.events {
+                self.set_event_mapping(&node_idx, &event.name, event.expression.clone());
+            }
+            children.push(node_idx);
+        }
+        let component = self.node_registry.get_node_by_name(name)?;
+        Ok(self.node_arena.insert(NodeData {
+            kind_index,
+            state: (component.make_state)()?,
+            props: (component.make_props)()?,
+            layout: LayoutInfo::default(),
+            prop_expressions: Vec::new(),
+            event_mappings: Default::default(),
+            children,
+        }))
+    }
+
+    fn register_component_node(&mut self, component_ast: &ComponentAst) {
+        self.node_registry.register(
+            &component_ast.name,
+            || Ok(Box::new(())),
+            || Ok(Box::new(())),
+            |_, _, _| Ok(()),
+            |_, _| Ok(()),
+            |_| {
+                Ok(LayoutConstraints::FixedLayout {
+                    width: 100.0,
+                    height: 100.0,
+                })
+            },
+            component_ast.children.clone(),
+        )
     }
 }
 

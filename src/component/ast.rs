@@ -3,7 +3,7 @@ use crate::component::value::ExpressionValue;
 use std::ops::{Deref, DerefMut};
 use termtree::Tree;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AstNode<T> {
     #[allow(dead_code)]
     span: Span,
@@ -54,7 +54,7 @@ pub struct ComponentDefinition {
 
 pub type NodeAst = AstNode<NodeDefinition>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NodeDefinition {
     pub tag: String,
     pub props: Vec<PropAst>,
@@ -64,14 +64,14 @@ pub struct NodeDefinition {
 
 pub type PropAst = AstNode<PropDefinition>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PropDefinition {
     pub name: String,
     pub expression: ExpressionAst,
     //pub children: Vec<UIAst>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ExpressionKind {
     Literal(ExpressionValue),
     VarUse(String),

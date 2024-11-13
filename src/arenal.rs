@@ -1,4 +1,5 @@
 use rand::random;
+use rgb::bytemuck::Contiguous;
 use std::num::NonZeroU16;
 use std::ops::{Index, IndexMut};
 
@@ -29,6 +30,17 @@ pub struct Idx<T> {
     generation: Generation,
     offset: OffsetType,
     marker: std::marker::PhantomData<T>,
+}
+
+impl<T> Default for Idx<T> {
+    fn default() -> Self {
+        Self {
+            arenal_id: 0,
+            offset: 0,
+            generation: Generation::new(u16::MAX_VALUE).unwrap(),
+            marker: std::marker::PhantomData,
+        }
+    }
 }
 
 impl<T> Clone for Idx<T> {

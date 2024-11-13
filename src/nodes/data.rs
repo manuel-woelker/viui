@@ -1,3 +1,4 @@
+use crate::arenal::Idx;
 use crate::component::ast::ExpressionAst;
 use crate::err;
 use crate::nodes::types::{PropsBox, StateBox};
@@ -11,6 +12,7 @@ pub struct NodeData {
     pub layout: LayoutInfo,
     pub state: StateBox,
     pub props: PropsBox,
+    pub children: Vec<Idx<NodeData>>,
     pub prop_expressions: Vec<PropExpression>,
     pub event_mappings: HashMap<String, ExpressionAst>,
 }

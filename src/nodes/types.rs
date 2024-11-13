@@ -19,3 +19,4 @@ pub type NodeEventHandler<E> =
 pub type NodeRenderFn = Box<dyn Fn(&mut Vec<RenderCommand>, &NodeData) -> ViuiResult<()> + Send>;
 
 impl NodeState for () {}
+impl NodeProps for () {}
