@@ -21,7 +21,7 @@ use bevy_reflect::{
     Typed, VariantInfo,
 };
 use crossbeam_channel::{select, Receiver, Sender};
-use log::debug;
+use log::{debug, info};
 use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
 use serde::de::DeserializeOwned;
@@ -56,7 +56,7 @@ pub struct UI {
     file_change_receiver: Receiver<()>,
     file_watcher: Debouncer<RecommendedWatcher>,
     root_node_file: PathBuf,
-    active_node: Option<Idx<NodeData>>,
+    active_nodes: Vec<Idx<NodeData>>,
 }
 
 struct RenderBackend {
@@ -112,7 +112,7 @@ impl UI {
             file_change_receiver,
             file_watcher,
             root_node_file: Default::default(),
-            active_node: Default::default(),
+            active_nodes: Default::default(),
             root_node_idx: Default::default(),
         })
     }
@@ -232,7 +232,7 @@ impl UI {
         match event.kind {
             UiEventKind::MouseMoved(position) => {
                 self.mouse_position = position;
-                if let Some(node) = &self.active_node {
+                for node in &self.active_nodes {
                     add_event_trigger(*node, InputEvent::mouse_move(position));
                 }
                 for (node, node_idx) in self.node_arena.entries_mut_indexed() {
@@ -244,10 +244,11 @@ impl UI {
                 }
             }
             UiEventKind::MouseInput(input) => {
+                self.active_nodes.clear();
                 let position = self.mouse_position;
                 for (node, idx) in self.node_arena.entries_mut_indexed() {
                     if node.layout.bounds.contains(position) {
-                        self.active_node = Some(idx);
+                        self.active_nodes.push(idx);
                         if input.mouse_event_kind == MouseEventKind::Pressed {
                             add_event_trigger(idx, InputEvent::mouse_press(position));
                         } else if input.mouse_event_kind == MouseEventKind::Released {
@@ -352,24 +353,35 @@ impl UI {
     }
 
     pub fn perform_layout(&mut self) -> ViuiResult<()> {
-        let mut tree: TaffyTree<()> = TaffyTree::new();
+        let mut tree: TaffyTree<Idx<NodeData>> = TaffyTree::new();
         let mut layout_nodes = vec![];
-        for node in self.node_arena.entries() {
+        let root_node = tree.new_leaf_with_context(
+            Default::default(), // overwritten later
+            self.root_node_idx,
+        )?;
+        let mut todo = vec![root_node];
+        while let Some(node_id) = todo.pop() {
+            layout_nodes.push(node_id);
+            let node = &self.node_arena[tree.get_node_context(node_id).unwrap()];
             let layout_contraints = self.node_registry.layout_node(node)?;
-            match layout_contraints {
-                LayoutConstraints::FixedLayout { width, height } => {
-                    let layout_node = tree.new_leaf(Style {
-                        size: taffy::Size {
-                            width: length(width),
-                            height: length(height),
-                        },
-                        ..Default::default()
-                    })?;
-                    layout_nodes.push(layout_node);
-                }
+            let style = match layout_contraints {
+                LayoutConstraints::FixedLayout { width, height } => Style {
+                    size: taffy::Size {
+                        width: length(width),
+                        height: length(height),
+                    },
+                    ..Default::default()
+                },
+            };
+            tree.set_style(node_id, style)?;
+            for child in node.children.iter() {
+                let child_id = tree.new_leaf_with_context(Style::default(), *child)?;
+                tree.add_child(root_node, child_id)?;
+                todo.push(child_id);
             }
         }
-        let root_node = tree.new_with_children(
+        tree.set_style(
+            root_node,
             Style {
                 flex_direction: FlexDirection::Column,
                 size: taffy::Size {
@@ -378,11 +390,11 @@ impl UI {
                 },
                 ..Default::default()
             },
-            &layout_nodes,
         )?;
         tree.compute_layout(root_node, taffy::Size::max_content())?;
-        for (node, layout_node) in self.node_arena.entries_mut().zip(layout_nodes) {
-            let layout = tree.layout(layout_node)?;
+        for node_id in layout_nodes {
+            let layout = tree.layout(node_id)?;
+            let node = &mut self.node_arena[tree.get_node_context(node_id).unwrap()];
             node.layout.bounds = Rect::new(
                 Point::new(layout.location.x, layout.location.y),
                 Size::new(layout.size.width, layout.size.height),
@@ -393,18 +405,21 @@ impl UI {
 
     pub fn make_render_commands(&self) -> ViuiResult<Vec<RenderCommand>> {
         let mut render_commands: Vec<RenderCommand> = Vec::new();
-        for node in self.node_arena.entries() {
+        let mut todo = vec![self.root_node_idx];
+        while let Some(node_idx) = todo.pop() {
+            let node = &self.node_arena[&node_idx];
             render_commands.push(RenderCommand::Save);
+            render_commands.push(RenderCommand::Translate {
+                x: node.layout.bounds.origin.x,
+                y: node.layout.bounds.origin.y,
+            });
             render_commands.push(RenderCommand::ClipRect(Rect::new(
                 Point::new(0.0, 0.0),
                 node.layout.bounds.size,
             )));
             self.node_registry.render_node(&mut render_commands, node)?;
             render_commands.push(RenderCommand::Restore);
-            render_commands.push(RenderCommand::Translate {
-                x: 0.0,
-                y: node.layout.bounds.size.height,
-            });
+            todo.extend(node.children.iter());
         }
         Ok(render_commands)
     }
@@ -455,8 +470,6 @@ impl UI {
             for component in &ast_data.components {
                 self.register_component_node(&component);
             }
-            //let root_component= ast_data.components.into_iter().find(|candidate| candidate.name == self.root_component_name).ok_or_else(|| err!("Could not find root component: {:?}", self.root_component_name))?;
-            //let model: ComponentNode = serde_yml::from_reader(File::open(&self.root_node_file)?)?;
             self.set_root_node()?;
             Ok(())
         })
@@ -465,18 +478,6 @@ impl UI {
     pub fn set_root_node(&mut self) -> ViuiResult<()> {
         self.node_arena.clear();
         self.root_node_idx = self.create_node(&self.root_component_name.to_string())?;
-        /*        for child in root.into_data().children {
-            let node_idx = self.add_node(&child.tag)?;
-            let child_data = child.into_data();
-            for prop in child_data.props {
-                let prop_data = prop.into_data();
-                self.set_node_prop(&node_idx, &prop_data.name, prop_data.expression);
-            }
-            for event in child_data.events {
-                let event_data = event.into_data();
-                self.set_event_mapping(&node_idx, &event_data.name, event_data.expression);
-            }
-        }*/
         Ok(())
     }
 

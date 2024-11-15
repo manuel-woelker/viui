@@ -1,5 +1,6 @@
 use rand::random;
 use rgb::bytemuck::Contiguous;
+use std::fmt::Debug;
 use std::num::NonZeroU16;
 use std::ops::{Index, IndexMut};
 
@@ -30,6 +31,16 @@ pub struct Idx<T> {
     generation: Generation,
     offset: OffsetType,
     marker: std::marker::PhantomData<T>,
+}
+
+impl<T> Debug for Idx<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Idx {{ arenal_id: {}, generation: {}, offset: {} }}",
+            self.arenal_id, self.generation, self.offset
+        )
+    }
 }
 
 impl<T> Default for Idx<T> {

@@ -16,4 +16,5 @@ component CounterComponent {
 
 component LabelComponent {
 	label(label=`Counter: ${counter}`)
+	label(label=`Gain: ${gain}`)
 }
