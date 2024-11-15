@@ -6,6 +6,7 @@ use crate::result::ViuiResult;
 use crate::types::Rect;
 use std::any::type_name;
 use std::collections::HashMap;
+use taffy::NodeId;
 
 pub struct NodeData {
     pub kind_index: usize,
@@ -15,6 +16,7 @@ pub struct NodeData {
     pub children: Vec<Idx<NodeData>>,
     pub prop_expressions: Vec<PropExpression>,
     pub event_mappings: HashMap<String, ExpressionAst>,
+    pub layout_id: NodeId,
 }
 
 #[derive(Clone, Debug, Default)]

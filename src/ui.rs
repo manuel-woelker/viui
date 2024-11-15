@@ -21,7 +21,7 @@ use bevy_reflect::{
     Typed, VariantInfo,
 };
 use crossbeam_channel::{select, Receiver, Sender};
-use log::{debug, info};
+use log::debug;
 use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
 use serde::de::DeserializeOwned;
@@ -35,7 +35,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use taffy::prelude::length;
-use taffy::{FlexDirection, Style, TaffyTree};
+use taffy::{FlexDirection, NodeId, Style, TaffyTree};
 use tracing::error;
 
 pub type ApplicationEventHandler = Box<dyn Fn(&mut ObservableState, &dyn Reflect) + Send>;
@@ -57,6 +57,7 @@ pub struct UI {
     file_watcher: Debouncer<RecommendedWatcher>,
     root_node_file: PathBuf,
     active_nodes: Vec<Idx<NodeData>>,
+    layout_tree: TaffyTree<()>,
 }
 
 struct RenderBackend {
@@ -114,6 +115,7 @@ impl UI {
             root_node_file: Default::default(),
             active_nodes: Default::default(),
             root_node_idx: Default::default(),
+            layout_tree: Default::default(),
         })
     }
 
@@ -353,16 +355,26 @@ impl UI {
     }
 
     pub fn perform_layout(&mut self) -> ViuiResult<()> {
-        let mut tree: TaffyTree<Idx<NodeData>> = TaffyTree::new();
+        let mut tree: TaffyTree<()> = TaffyTree::new();
         let mut layout_nodes = vec![];
-        let root_node = tree.new_leaf_with_context(
-            Default::default(), // overwritten later
-            self.root_node_idx,
-        )?;
-        let mut todo = vec![root_node];
+        let root_layout_node = tree.new_leaf(Style {
+            flex_direction: FlexDirection::Column,
+            size: taffy::Size {
+                width: length(800.0),
+                height: length(600.0),
+            },
+            ..Default::default()
+        })?;
+        self.node_arena[&self.root_node_idx].layout_id = root_layout_node;
+        let mut todo: Vec<_> = self.node_arena[&self.root_node_idx]
+            .children
+            .iter()
+            .copied()
+            .rev()
+            .collect();
         while let Some(node_id) = todo.pop() {
             layout_nodes.push(node_id);
-            let node = &self.node_arena[tree.get_node_context(node_id).unwrap()];
+            let node = &self.node_arena[&node_id];
             let layout_contraints = self.node_registry.layout_node(node)?;
             let style = match layout_contraints {
                 LayoutConstraints::FixedLayout { width, height } => Style {
@@ -373,28 +385,17 @@ impl UI {
                     ..Default::default()
                 },
             };
-            tree.set_style(node_id, style)?;
-            for child in node.children.iter() {
-                let child_id = tree.new_leaf_with_context(Style::default(), *child)?;
-                tree.add_child(root_node, child_id)?;
-                todo.push(child_id);
+            let child_id = tree.new_leaf(style)?;
+            tree.add_child(root_layout_node, child_id)?;
+            for child in node.children.iter().rev() {
+                todo.push(*child);
             }
+            self.node_arena[&node_id].layout_id = child_id;
         }
-        tree.set_style(
-            root_node,
-            Style {
-                flex_direction: FlexDirection::Column,
-                size: taffy::Size {
-                    width: length(800.0),
-                    height: length(600.0),
-                },
-                ..Default::default()
-            },
-        )?;
-        tree.compute_layout(root_node, taffy::Size::max_content())?;
+        tree.compute_layout(root_layout_node, taffy::Size::max_content())?;
         for node_id in layout_nodes {
-            let layout = tree.layout(node_id)?;
-            let node = &mut self.node_arena[tree.get_node_context(node_id).unwrap()];
+            let node = &mut self.node_arena[&node_id];
+            let layout = tree.layout(node.layout_id)?;
             node.layout.bounds = Rect::new(
                 Point::new(layout.location.x, layout.location.y),
                 Size::new(layout.size.width, layout.size.height),
@@ -504,6 +505,7 @@ impl UI {
             prop_expressions: Vec::new(),
             event_mappings: Default::default(),
             children,
+            layout_id: NodeId::new(0),
         }))
     }
 
@@ -516,8 +518,8 @@ impl UI {
             |_, _| Ok(()),
             |_| {
                 Ok(LayoutConstraints::FixedLayout {
-                    width: 100.0,
-                    height: 100.0,
+                    width: 0.0,
+                    height: 0.0,
                 })
             },
             component_ast.children.clone(),
