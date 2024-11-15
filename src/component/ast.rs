@@ -58,7 +58,7 @@ pub type NodeAst = AstNode<NodeDefinition>;
 pub struct NodeDefinition {
     pub tag: String,
     pub props: Vec<PropAst>,
-    //pub children: Vec<UIAst>,
+    pub children: Vec<NodeAst>,
     pub events: Vec<PropAst>,
 }
 
@@ -150,6 +150,11 @@ fn node_ast_to_tree(node_definition: &NodeAst) -> Tree<String> {
         let mut event_tree = prop_ast_to_tree(event);
         event_tree.root.insert(0, '@');
         event_tree.root += "=";
+        tree.push(event_tree);
+    }
+    for child in &node_definition.children {
+        let mut event_tree = node_ast_to_tree(child);
+        event_tree.root.insert_str(0, "child: ");
         tree.push(event_tree);
     }
     tree

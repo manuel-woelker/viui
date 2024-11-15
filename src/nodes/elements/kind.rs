@@ -30,7 +30,9 @@ pub trait Element {
 }
 
 pub enum LayoutConstraints {
+    Passthrough,
     FixedLayout { width: Float, height: Float },
+    HorizontalLayout {},
 }
 
 #[derive(Debug, Reflect)]

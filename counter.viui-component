@@ -1,4 +1,8 @@
 component CounterComponent {
+	hstack {
+		label(label=`A`)
+		label(label=`B`)
+	}
 	LabelComponent()
 	label(label=`Counter: ${counter}`)
 	button(label="Increment" @click=Increment)

@@ -1,11 +1,12 @@
 use crate::arenal::{Arenal, Idx};
 use crate::bail;
-use crate::component::ast::{ComponentAst, ExpressionAst};
+use crate::component::ast::{ComponentAst, ExpressionAst, NodeAst};
 use crate::component::eval::eval;
 use crate::component::parser::parse_ui;
 use crate::component::value::ExpressionValue;
 use crate::nodes::data::{LayoutInfo, NodeData, PropExpression};
 use crate::nodes::elements::button::ButtonElement;
+use crate::nodes::elements::hstack::HStackElement;
 use crate::nodes::elements::kind::{Element, LayoutConstraints};
 use crate::nodes::elements::knob::KnobElement;
 use crate::nodes::elements::label::LabelElement;
@@ -57,7 +58,6 @@ pub struct UI {
     file_watcher: Debouncer<RecommendedWatcher>,
     root_node_file: PathBuf,
     active_nodes: Vec<Idx<NodeData>>,
-    layout_tree: TaffyTree<()>,
 }
 
 struct RenderBackend {
@@ -96,6 +96,7 @@ impl UI {
         node_registry.register_node::<LabelElement>();
         node_registry.register_node::<ButtonElement>();
         node_registry.register_node::<KnobElement>();
+        node_registry.register_node::<HStackElement>();
         Ok(UI {
             root_component_name,
             node_registry,
@@ -115,7 +116,6 @@ impl UI {
             root_node_file: Default::default(),
             active_nodes: Default::default(),
             root_node_idx: Default::default(),
-            layout_tree: Default::default(),
         })
     }
 
@@ -369,28 +369,38 @@ impl UI {
         let mut todo: Vec<_> = self.node_arena[&self.root_node_idx]
             .children
             .iter()
-            .copied()
+            .map(|child_id| (root_layout_node, *child_id))
             .rev()
             .collect();
-        while let Some(node_id) = todo.pop() {
+        while let Some((parent_layout_id, node_id)) = todo.pop() {
             layout_nodes.push(node_id);
             let node = &self.node_arena[&node_id];
             let layout_contraints = self.node_registry.layout_node(node)?;
             let style = match layout_contraints {
-                LayoutConstraints::FixedLayout { width, height } => Style {
+                LayoutConstraints::FixedLayout { width, height } => Some(Style {
                     size: taffy::Size {
                         width: length(width),
                         height: length(height),
                     },
                     ..Default::default()
-                },
+                }),
+                LayoutConstraints::HorizontalLayout {} => Some(Style {
+                    flex_direction: FlexDirection::Row,
+                    ..Default::default()
+                }),
+                LayoutConstraints::Passthrough => None,
             };
-            let child_id = tree.new_leaf(style)?;
-            tree.add_child(root_layout_node, child_id)?;
+            let layout_id = if let Some(style) = style {
+                let child_id = tree.new_leaf(style)?;
+                tree.add_child(parent_layout_id, child_id)?;
+                child_id
+            } else {
+                parent_layout_id
+            };
             for child in node.children.iter().rev() {
-                todo.push(*child);
+                todo.push((layout_id, *child));
             }
-            self.node_arena[&node_id].layout_id = child_id;
+            self.node_arena[&node_id].layout_id = layout_id;
         }
         tree.compute_layout(root_layout_node, taffy::Size::max_content())?;
         for node_id in layout_nodes {
@@ -487,13 +497,7 @@ impl UI {
         let kind_index = component.kind_index;
         let mut children = vec![];
         for child in &component.children.clone() {
-            let node_idx = self.create_node(&child.tag)?;
-            for prop in &child.props {
-                self.set_node_prop(&node_idx, &prop.name, prop.expression.clone());
-            }
-            for event in &child.events {
-                self.set_event_mapping(&node_idx, &event.name, event.expression.clone());
-            }
+            let node_idx = self.create_child(child)?;
             children.push(node_idx);
         }
         let component = self.node_registry.get_node_by_name(name)?;
@@ -507,6 +511,22 @@ impl UI {
             children,
             layout_id: NodeId::new(0),
         }))
+    }
+
+    fn create_child(&mut self, child: &NodeAst) -> ViuiResult<Idx<NodeData>> {
+        let node_idx = self.create_node(&child.tag)?;
+        for prop in &child.props {
+            self.set_node_prop(&node_idx, &prop.name, prop.expression.clone());
+        }
+        for event in &child.events {
+            self.set_event_mapping(&node_idx, &event.name, event.expression.clone());
+        }
+        let mut children = vec![];
+        for child in &child.children {
+            children.push(self.create_child(child)?)
+        }
+        self.set_children(&node_idx, children);
+        Ok(node_idx)
     }
 
     fn register_component_node(&mut self, component_ast: &ComponentAst) {
@@ -524,6 +544,10 @@ impl UI {
             },
             component_ast.children.clone(),
         )
+    }
+
+    fn set_children(&mut self, parent: &Idx<NodeData>, children: Vec<Idx<NodeData>>) {
+        self.node_arena.index_mut(parent).children = children;
     }
 }
 

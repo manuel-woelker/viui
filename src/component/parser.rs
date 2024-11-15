@@ -76,6 +76,7 @@ impl<'a> Parser<'a> {
             .to_string();
         let mut props = vec![];
         let mut events = vec![];
+        let mut children = vec![];
         if self.is_at(TokenKind::OpenParen) {
             self.advance_token();
             while !self.is_at(TokenKind::CloseParen) {
@@ -88,9 +89,21 @@ impl<'a> Parser<'a> {
             }
             self.consume(TokenKind::CloseParen, "Expected ')'")?;
         }
+        if self.is_at(TokenKind::OpenBrace) {
+            self.advance_token();
+            while !self.is_at(TokenKind::CloseBrace) {
+                children.push(self.parse_node()?);
+            }
+            self.consume(TokenKind::CloseBrace, "Expected '}'")?;
+        }
         Ok(NodeAst::new(
             Span::new(start, self.previous_token().span.end),
-            NodeDefinition { tag, props, events },
+            NodeDefinition {
+                tag,
+                props,
+                events,
+                children,
+            },
         ))
     }
 
@@ -382,6 +395,13 @@ mod tests {
                             └── VarUse Increment
             "#]];
 
+        parse_component_with_children, "component event {button{label}}",
+            expect![[r#"
+                UIDefinition
+                └── Component event
+                    └── Node button
+                        └── child: Node label
+            "#]];
     );
 
     #[test]
