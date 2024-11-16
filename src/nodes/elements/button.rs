@@ -59,7 +59,7 @@ impl Element for ButtonElement {
             ),
             radius: 5.0,
         });
-        render_queue.push(RenderCommand::Translate { x: 10.0, y: 20.0 });
+        render_queue.push(RenderCommand::Translate { x: 15.0, y: 25.0 });
         render_queue.push(RenderCommand::DrawText(props.label.clone()));
     }
 

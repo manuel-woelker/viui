@@ -4,7 +4,7 @@ use crate::types::Point;
 use crate::ui::RenderBackendMessage;
 use crossbeam_channel::{Receiver, Sender};
 use femtovg::renderer::OpenGl;
-use femtovg::{Baseline, Canvas, Color, ImageFlags, Paint, Path, Solidity};
+use femtovg::{Baseline, Canvas, Color, FontId, ImageFlags, Paint, Path, Solidity};
 use glutin::config::ConfigTemplateBuilder;
 use glutin::context::{
     ContextAttributesBuilder, NotCurrentGlContextSurfaceAccessor, PossiblyCurrentContext,
@@ -15,7 +15,6 @@ use glutin::surface::{Surface, SurfaceAttributesBuilder, WindowSurface};
 use glutin_winit::DisplayBuilder;
 use raw_window_handle::HasRawWindowHandle;
 use std::collections::HashMap;
-use std::fs::File;
 use std::num::NonZeroU32;
 use std::thread;
 use tracing::error;
@@ -35,6 +34,7 @@ pub struct RenderState<'a> {
     window: &'a Window,
     canvas: &'a mut Canvas<OpenGl>,
     image_map: &'a mut HashMap<ImageId, femtovg::ImageId>,
+    fonts: &'a [FontId],
 }
 
 impl FemtovgRenderBackend {
@@ -72,8 +72,11 @@ impl FemtovgRenderBackend {
 
         let mut canvas = Canvas::new(renderer).expect("Cannot create canvas");
         canvas.set_size(1000, 900, window.scale_factor() as f32);
-        File::open("assets/fonts/Roboto-Regular.ttf").unwrap();
-        canvas.add_font("assets/fonts/Roboto-Regular.ttf").unwrap();
+        //        canvas.add_font("assets/fonts/Roboto-Regular.ttf").unwrap();
+        let font_id = canvas
+            .add_font("assets/fonts/OpenSans-Regular.ttf")
+            .unwrap();
+        let fonts = vec![font_id];
         let mut render_list: Vec<RenderCommand> = Vec::new();
         let mut image_map = Default::default();
         event_loop.run(move |event, _target, control_flow| {
@@ -83,6 +86,7 @@ impl FemtovgRenderBackend {
                 window: &window,
                 canvas: &mut canvas,
                 image_map: &mut image_map,
+                fonts: &fonts,
             };
             *control_flow = ControlFlow::Wait;
             match event {
@@ -186,19 +190,22 @@ fn render(render_state: &mut RenderState, render_commands: &[RenderCommand]) {
         surface,
         context,
         image_map,
+        fonts,
     } = render_state;
     let size = window.inner_size();
-    canvas.set_size(size.width, size.height, window.scale_factor() as f32);
+    canvas.set_size(size.width, size.height, 1.0);
     canvas.reset_transform();
     canvas.clear_rect(0, 0, size.width, size.height, Color::white());
 
     let mut fill_paint = Paint::color(Color::hsl(0.0, 0.0, 1.0))
         .with_text_baseline(Baseline::Middle)
         .with_font_size(20.0)
+        .with_font(fonts)
         .with_anti_alias(true);
     let mut stroke_paint = Paint::color(Color::hsl(0.0, 0.0, 0.0))
         .with_text_baseline(Baseline::Middle)
-        .with_font_size(20.0)
+        .with_font(fonts)
+        .with_font_size(25.0)
         .with_line_width(0.5)
         .with_anti_alias(true);
     for command in render_commands {
@@ -224,7 +231,10 @@ fn render(render_state: &mut RenderState, render_commands: &[RenderCommand]) {
                 canvas.reset_transform();
             }
             RenderCommand::DrawText(text) => {
-                canvas.fill_text(0.0, 0.0, text, &stroke_paint).unwrap();
+                stroke_paint.set_line_width(1.0);
+                stroke_paint.set_anti_alias(true);
+                stroke_paint.set_text_baseline(Baseline::Bottom);
+                canvas.fill_text(0.0, 10.0, text, &stroke_paint).unwrap();
             }
             RenderCommand::Save => {
                 canvas.save();

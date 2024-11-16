@@ -16,7 +16,7 @@ impl Element for LabelElement {
         _state: &Self::State,
         props: &Self::Props,
     ) {
-        render_queue.push(RenderCommand::Translate { x: 10.0, y: 20.0 });
+        render_queue.push(RenderCommand::Translate { x: 10.0, y: 25.0 });
         render_queue.push(RenderCommand::DrawText(props.label.clone()));
     }
 

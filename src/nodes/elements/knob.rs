@@ -102,14 +102,14 @@ impl Element for KnobElement {
         });
 
         render_queue.push(RenderCommand::SetStrokeColor(Color::new(0, 0, 0, 255)));
-        render_queue.push(RenderCommand::Translate { x: 10.0, y: 70.0 });
+        render_queue.push(RenderCommand::Translate { x: 10.0, y: 80.0 });
         render_queue.push(RenderCommand::DrawText(props.label.clone()));
     }
 
     fn layout_element(_state: &Self::State, _props: &Self::Props) -> ViuiResult<LayoutConstraints> {
         Ok(LayoutConstraints::FixedLayout {
             width: 200.0,
-            height: 80.0,
+            height: 140.0,
         })
     }
 }

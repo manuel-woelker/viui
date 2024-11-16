@@ -3,9 +3,7 @@ component CounterComponent {
 		label(label=`A`)
 		label(label=`B`)
 	}
-	label(label=`Before`)
 	image(src="assets/images/cat_playing.jpg")
-	label(label=`After`)
 	LabelComponent()
 	label(label=`Counter: ${counter}`)
 	button(label="Increment" @click=Increment)
