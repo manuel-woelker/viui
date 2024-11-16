@@ -1,5 +1,5 @@
 use crate::nodes::elements::kind::{Element, LayoutConstraints, NoEvents};
-use crate::render::command::RenderCommand;
+use crate::render::context::RenderContext;
 use crate::result::ViuiResult;
 
 pub struct HStackElement {}
@@ -10,7 +10,7 @@ impl Element for HStackElement {
     type Props = ();
     type Events = NoEvents;
     fn render_element(
-        _render_queue: &mut Vec<RenderCommand>,
+        _render_context: &mut RenderContext,
         _state: &Self::State,
         _props: &Self::Props,
     ) {

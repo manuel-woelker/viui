@@ -1,4 +1,5 @@
 use crate::result::ViuiResult;
+use log::info;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -20,6 +21,7 @@ impl Resource {
     }
 
     pub fn as_bytes(&self) -> ViuiResult<Vec<u8>> {
+        info!("Loading resource: '{}'", self.inner.path.display());
         Ok(std::fs::read(self.inner.path.clone())?)
     }
 }

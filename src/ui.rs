@@ -4,6 +4,7 @@ use crate::component::ast::{ComponentAst, ExpressionAst, NodeAst};
 use crate::component::eval::eval;
 use crate::component::parser::parse_ui;
 use crate::component::value::ExpressionValue;
+use crate::infrastructure::image_pool::ImagePool;
 use crate::nodes::data::{LayoutInfo, NodeData, PropExpression};
 use crate::nodes::elements::button::ButtonElement;
 use crate::nodes::elements::hstack::HStackElement;
@@ -16,6 +17,7 @@ use crate::nodes::registry::NodeRegistry;
 use crate::nodes::types::NodeEvents;
 use crate::observable_state::ObservableState;
 use crate::render::command::RenderCommand;
+use crate::render::context::RenderContext;
 use crate::result::{context, ViuiResult};
 use crate::types::{Point, Rect, Size};
 use bevy_reflect::{
@@ -59,6 +61,7 @@ pub struct UI {
     file_watcher: Debouncer<RecommendedWatcher>,
     root_node_file: PathBuf,
     active_nodes: Vec<Idx<NodeData>>,
+    image_pool: ImagePool,
 }
 
 struct RenderBackend {
@@ -118,6 +121,7 @@ impl UI {
             root_node_file: Default::default(),
             active_nodes: Default::default(),
             root_node_idx: Default::default(),
+            image_pool: Default::default(),
         })
     }
 
@@ -420,25 +424,25 @@ impl UI {
         Ok(())
     }
 
-    pub fn make_render_commands(&self) -> ViuiResult<Vec<RenderCommand>> {
-        let mut render_commands: Vec<RenderCommand> = Vec::new();
+    pub fn make_render_commands(&mut self) -> ViuiResult<Vec<RenderCommand>> {
+        let mut render_context = RenderContext::new(&mut self.image_pool);
         let mut todo = vec![self.root_node_idx];
         while let Some(node_idx) = todo.pop() {
             let node = &self.node_arena[&node_idx];
-            render_commands.push(RenderCommand::Save);
-            render_commands.push(RenderCommand::Translate {
+            render_context.add_command(RenderCommand::Save);
+            render_context.add_command(RenderCommand::Translate {
                 x: node.layout.bounds.origin.x,
                 y: node.layout.bounds.origin.y,
             });
-            render_commands.push(RenderCommand::ClipRect(Rect::new(
+            render_context.add_command(RenderCommand::ClipRect(Rect::new(
                 Point::new(0.0, 0.0),
                 node.layout.bounds.size,
             )));
-            self.node_registry.render_node(&mut render_commands, node)?;
-            render_commands.push(RenderCommand::Restore);
+            self.node_registry.render_node(&mut render_context, node)?;
+            render_context.add_command(RenderCommand::Restore);
             todo.extend(node.children.iter());
         }
-        Ok(render_commands)
+        Ok(render_context.render_queue())
     }
 
     pub fn set_node_prop(

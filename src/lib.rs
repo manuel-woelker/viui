@@ -1,5 +1,6 @@
 pub mod arenal;
 pub mod component;
+pub mod infrastructure;
 pub mod logging;
 pub mod model;
 pub mod nodes;

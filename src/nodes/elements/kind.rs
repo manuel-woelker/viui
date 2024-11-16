@@ -1,6 +1,6 @@
 use crate::nodes::events::InputEvent;
 use crate::nodes::types::{NodeEvents, NodeProps, NodeState};
-use crate::render::command::RenderCommand;
+use crate::render::context::RenderContext;
 use crate::result::ViuiResult;
 use crate::types::Float;
 use bevy_reflect::Reflect;
@@ -20,11 +20,7 @@ pub trait Element {
         _event_trigger: &mut EventTrigger<'_, Self::Events>,
     ) {
     }
-    fn render_element(
-        render_queue: &mut Vec<RenderCommand>,
-        state: &Self::State,
-        props: &Self::Props,
-    );
+    fn render_element(render_context: &mut RenderContext, state: &Self::State, props: &Self::Props);
 
     fn layout_element(state: &Self::State, props: &Self::Props) -> ViuiResult<LayoutConstraints>;
 }

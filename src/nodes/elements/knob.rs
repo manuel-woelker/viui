@@ -2,6 +2,7 @@ use crate::nodes::elements::kind::{Element, EventTrigger, LayoutConstraints};
 use crate::nodes::events::{InputEvent, InputEventKind};
 use crate::nodes::types::{NodeEvents, NodeProps, NodeState};
 use crate::render::command::RenderCommand;
+use crate::render::context::RenderContext;
 use crate::result::ViuiResult;
 use crate::types::{Color, Float, Point, Rect, Size};
 use bevy_reflect::Reflect;
@@ -53,7 +54,7 @@ impl Element for KnobElement {
     }
 
     fn render_element(
-        render_queue: &mut Vec<RenderCommand>,
+        render_context: &mut RenderContext,
         _state: &Self::State,
         props: &Self::Props,
     ) {
@@ -63,11 +64,11 @@ impl Element for KnobElement {
         let min_angle = 0.75 * PI;
         let max_angle = 2.25 * PI;
         let angle = min_angle + relative_value * (max_angle - min_angle);
-        render_queue.push(RenderCommand::SetStrokeWidth(2.0));
-        render_queue.push(RenderCommand::SetStrokeColor(Color::new(0, 0, 0, 255)));
-        render_queue.push(RenderCommand::SetFillColor(Color::new(240, 240, 240, 255)));
-        render_queue.push(RenderCommand::Translate { x: 10.0, y: 20.0 });
-        render_queue.push(RenderCommand::FillRoundRect {
+        render_context.add_command(RenderCommand::SetStrokeWidth(2.0));
+        render_context.add_command(RenderCommand::SetStrokeColor(Color::new(0, 0, 0, 255)));
+        render_context.add_command(RenderCommand::SetFillColor(Color::new(240, 240, 240, 255)));
+        render_context.add_command(RenderCommand::Translate { x: 10.0, y: 20.0 });
+        render_context.add_command(RenderCommand::FillRoundRect {
             rect: Rect::new(Point::new(10.0, 10.0), Size::new(40.0, 40.0)),
             radius: 20.0,
         });
@@ -79,31 +80,31 @@ impl Element for KnobElement {
         let end_x = center_x + (radius - 10.0) * angle.cos();
         let end_y = center_y + (radius - 10.0) * angle.sin();
 
-        render_queue.push(RenderCommand::Line {
+        render_context.add_command(RenderCommand::Line {
             start: Point::new(start_x, start_y),
             end: Point::new(end_x, end_y),
         });
-        render_queue.push(RenderCommand::SetStrokeColor(Color::new(
+        render_context.add_command(RenderCommand::SetStrokeColor(Color::new(
             220, 220, 220, 255,
         )));
-        render_queue.push(RenderCommand::SetStrokeWidth(3.0));
-        render_queue.push(RenderCommand::Arc {
+        render_context.add_command(RenderCommand::SetStrokeWidth(3.0));
+        render_context.add_command(RenderCommand::Arc {
             center: Point::new(30.0, 30.0),
             radius: 30.0,
             start_angle: min_angle,
             end_angle: max_angle,
         });
-        render_queue.push(RenderCommand::SetStrokeColor(Color::new(200, 0, 0, 255)));
-        render_queue.push(RenderCommand::Arc {
+        render_context.add_command(RenderCommand::SetStrokeColor(Color::new(200, 0, 0, 255)));
+        render_context.add_command(RenderCommand::Arc {
             center: Point::new(30.0, 30.0),
             radius: 30.0,
             start_angle: min_angle,
             end_angle: angle,
         });
 
-        render_queue.push(RenderCommand::SetStrokeColor(Color::new(0, 0, 0, 255)));
-        render_queue.push(RenderCommand::Translate { x: 10.0, y: 80.0 });
-        render_queue.push(RenderCommand::DrawText(props.label.clone()));
+        render_context.add_command(RenderCommand::SetStrokeColor(Color::new(0, 0, 0, 255)));
+        render_context.add_command(RenderCommand::Translate { x: 10.0, y: 80.0 });
+        render_context.add_command(RenderCommand::DrawText(props.label.clone()));
     }
 
     fn layout_element(_state: &Self::State, _props: &Self::Props) -> ViuiResult<LayoutConstraints> {

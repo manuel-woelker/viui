@@ -1,11 +1,9 @@
 use crate::component::ast::NodeAst;
 use crate::nodes::data::NodeData;
 use crate::nodes::elements::kind::LayoutConstraints;
-use crate::nodes::types::{NodeEventHandler, NodeEvents, NodeProps, NodeState};
-use crate::render::command::RenderCommand;
+use crate::nodes::types::{NodeEventHandler, NodeEvents, NodeProps, NodeRenderFn, NodeState};
 use crate::result::ViuiResult;
 
-pub type NodeRenderFn = Box<dyn Fn(&mut Vec<RenderCommand>, &NodeData) -> ViuiResult<()> + Send>;
 pub type LayoutFn = Box<dyn Fn(&NodeData) -> ViuiResult<LayoutConstraints> + Send>;
 
 pub struct NodeDescriptor {
