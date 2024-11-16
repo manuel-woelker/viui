@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 femtovg = "0.10.1"
+image = { version = "0.25.5", features = ["jpeg"] }
 winit = "0.28.6"
 glutin = "0.30.10"
 glutin-winit = "0.3.0"

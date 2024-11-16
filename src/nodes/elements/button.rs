@@ -50,8 +50,13 @@ impl Element for ButtonElement {
         } else {
             render_queue.push(RenderCommand::SetFillColor(Color::new(220, 220, 220, 255)));
         }
+        let stroke_width = 2.0f32;
+        render_queue.push(RenderCommand::SetStrokeWidth(2.0));
         render_queue.push(RenderCommand::FillRoundRect {
-            rect: Rect::new(Point::new(0.0, 0.0), Size::new(200.0, 40.0)),
+            rect: Rect::new(
+                Point::new(stroke_width, stroke_width),
+                Size::new(200.0 - stroke_width * 2.0, 40.0 - stroke_width * 2.0),
+            ),
             radius: 5.0,
         });
         render_queue.push(RenderCommand::Translate { x: 10.0, y: 20.0 });

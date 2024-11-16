@@ -7,6 +7,7 @@ use crate::component::value::ExpressionValue;
 use crate::nodes::data::{LayoutInfo, NodeData, PropExpression};
 use crate::nodes::elements::button::ButtonElement;
 use crate::nodes::elements::hstack::HStackElement;
+use crate::nodes::elements::image::ImageElement;
 use crate::nodes::elements::kind::{Element, LayoutConstraints};
 use crate::nodes::elements::knob::KnobElement;
 use crate::nodes::elements::label::LabelElement;
@@ -97,6 +98,7 @@ impl UI {
         node_registry.register_node::<ButtonElement>();
         node_registry.register_node::<KnobElement>();
         node_registry.register_node::<HStackElement>();
+        node_registry.register_node::<ImageElement>();
         Ok(UI {
             root_component_name,
             node_registry,
@@ -360,8 +362,8 @@ impl UI {
         let root_layout_node = tree.new_leaf(Style {
             flex_direction: FlexDirection::Column,
             size: taffy::Size {
-                width: length(800.0),
-                height: length(600.0),
+                width: length(1000.0),
+                height: length(900.0),
             },
             ..Default::default()
         })?;
@@ -386,6 +388,10 @@ impl UI {
                 }),
                 LayoutConstraints::HorizontalLayout {} => Some(Style {
                     flex_direction: FlexDirection::Row,
+                    size: taffy::Size {
+                        width: length(1000.0),
+                        height: length(50.0),
+                    },
                     ..Default::default()
                 }),
                 LayoutConstraints::Passthrough => None,

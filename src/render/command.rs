@@ -1,4 +1,8 @@
+use crate::resource::Resource;
 use crate::types::{Color, Float, Point, Rect};
+
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
+pub struct ImageId(pub u64);
 
 #[derive(Clone, Debug)]
 pub enum RenderCommand {
@@ -31,4 +35,11 @@ pub enum RenderCommand {
     ResetTransform,
     DrawText(String),
     ClipRect(Rect),
+    LoadImage {
+        image_id: ImageId,
+        resource: Resource,
+    },
+    DrawImage {
+        image_id: ImageId,
+    },
 }

@@ -1,10 +1,10 @@
 use crate::nodes::events::{MouseEventKind, UiEvent};
-use crate::render::command::RenderCommand;
+use crate::render::command::{ImageId, RenderCommand};
 use crate::types::Point;
 use crate::ui::RenderBackendMessage;
 use crossbeam_channel::{Receiver, Sender};
 use femtovg::renderer::OpenGl;
-use femtovg::{Baseline, Canvas, Color, Paint, Path, Renderer, Solidity};
+use femtovg::{Baseline, Canvas, Color, ImageFlags, Paint, Path, Solidity};
 use glutin::config::ConfigTemplateBuilder;
 use glutin::context::{
     ContextAttributesBuilder, NotCurrentGlContextSurfaceAccessor, PossiblyCurrentContext,
@@ -14,6 +14,7 @@ use glutin::prelude::GlSurface;
 use glutin::surface::{Surface, SurfaceAttributesBuilder, WindowSurface};
 use glutin_winit::DisplayBuilder;
 use raw_window_handle::HasRawWindowHandle;
+use std::collections::HashMap;
 use std::fs::File;
 use std::num::NonZeroU32;
 use std::thread;
@@ -26,6 +27,14 @@ use winit::window::{Window, WindowBuilder};
 pub struct FemtovgRenderBackend {
     message_receiver: Receiver<RenderBackendMessage>,
     event_sender: Sender<UiEvent>,
+}
+
+pub struct RenderState<'a> {
+    context: &'a PossiblyCurrentContext,
+    surface: &'a Surface<WindowSurface>,
+    window: &'a Window,
+    canvas: &'a mut Canvas<OpenGl>,
+    image_map: &'a mut HashMap<ImageId, femtovg::ImageId>,
 }
 
 impl FemtovgRenderBackend {
@@ -62,11 +71,19 @@ impl FemtovgRenderBackend {
                 .expect("Cannot create renderer");
 
         let mut canvas = Canvas::new(renderer).expect("Cannot create canvas");
-        canvas.set_size(1000, 600, window.scale_factor() as f32);
+        canvas.set_size(1000, 900, window.scale_factor() as f32);
         File::open("assets/fonts/Roboto-Regular.ttf").unwrap();
         canvas.add_font("assets/fonts/Roboto-Regular.ttf").unwrap();
         let mut render_list: Vec<RenderCommand> = Vec::new();
+        let mut image_map = Default::default();
         event_loop.run(move |event, _target, control_flow| {
+            let mut render_state = RenderState {
+                context: &context,
+                surface: &surface,
+                window: &window,
+                canvas: &mut canvas,
+                image_map: &mut image_map,
+            };
             *control_flow = ControlFlow::Wait;
             match event {
                 Event::WindowEvent { event, .. } => match event {
@@ -92,7 +109,7 @@ impl FemtovgRenderBackend {
                     _ => {}
                 },
                 Event::RedrawRequested(_) => {
-                    render(&context, &surface, &window, &mut canvas, &render_list);
+                    render(&mut render_state, &render_list);
                 }
                 Event::UserEvent(message) => {
                     render_list = message.render_commands;
@@ -100,7 +117,7 @@ impl FemtovgRenderBackend {
                 }
                 _ => {}
             }
-        })
+        });
     }
 }
 
@@ -113,7 +130,7 @@ fn create_window(
     Surface<WindowSurface>,
 ) {
     let window_builder = WindowBuilder::new()
-        .with_inner_size(PhysicalSize::new(1000., 600.))
+        .with_inner_size(PhysicalSize::new(1000., 900.))
         .with_title("viui");
 
     let template = ConfigTemplateBuilder::new().with_alpha_size(8);
@@ -162,13 +179,14 @@ fn create_window(
     )
 }
 
-fn render<T: Renderer>(
-    context: &PossiblyCurrentContext,
-    surface: &Surface<WindowSurface>,
-    window: &Window,
-    canvas: &mut Canvas<T>,
-    render_commands: &[RenderCommand],
-) {
+fn render(render_state: &mut RenderState, render_commands: &[RenderCommand]) {
+    let RenderState {
+        window,
+        canvas,
+        surface,
+        context,
+        image_map,
+    } = render_state;
     let size = window.inner_size();
     canvas.set_size(size.width, size.height, window.scale_factor() as f32);
     canvas.reset_transform();
@@ -181,6 +199,7 @@ fn render<T: Renderer>(
     let mut stroke_paint = Paint::color(Color::hsl(0.0, 0.0, 0.0))
         .with_text_baseline(Baseline::Middle)
         .with_font_size(20.0)
+        .with_line_width(0.5)
         .with_anti_alias(true);
     for command in render_commands {
         match command {
@@ -252,6 +271,20 @@ fn render<T: Renderer>(
                     clip_rect.size.width,
                     clip_rect.size.height,
                 );
+            }
+            RenderCommand::LoadImage { image_id, resource } => {
+                let femto_id = canvas
+                    .load_image_mem(&resource.as_bytes().unwrap(), ImageFlags::empty())
+                    .unwrap();
+                image_map.insert(*image_id, femto_id);
+            }
+            RenderCommand::DrawImage { image_id } => {
+                let femto_img = image_map[image_id];
+                let (iw, ih) = canvas.image_size(femto_img).unwrap();
+                let img_paint = Paint::image(femto_img, 0.0, 0.0, iw as f32, ih as f32, 0.0, 1.0);
+                let mut path = Path::new();
+                path.rect(0.0, 0.0, iw as f32, ih as f32);
+                canvas.fill_path(&path, &img_paint);
             }
         }
     }
