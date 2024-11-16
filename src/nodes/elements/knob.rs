@@ -1,3 +1,4 @@
+use crate::infrastructure::layout_context::LayoutContext;
 use crate::nodes::elements::kind::{Element, EventTrigger, LayoutConstraints};
 use crate::nodes::events::{InputEvent, InputEventKind};
 use crate::nodes::types::{NodeEvents, NodeProps, NodeState};
@@ -107,7 +108,11 @@ impl Element for KnobElement {
         render_context.add_command(RenderCommand::DrawText(props.label.clone()));
     }
 
-    fn layout_element(_state: &Self::State, _props: &Self::Props) -> ViuiResult<LayoutConstraints> {
+    fn layout_element(
+        _layout_context: &mut LayoutContext,
+        _state: &mut Self::State,
+        _props: &Self::Props,
+    ) -> ViuiResult<LayoutConstraints> {
         Ok(LayoutConstraints::FixedLayout {
             width: 200.0,
             height: 140.0,

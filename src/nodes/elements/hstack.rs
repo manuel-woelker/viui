@@ -1,3 +1,4 @@
+use crate::infrastructure::layout_context::LayoutContext;
 use crate::nodes::elements::kind::{Element, LayoutConstraints, NoEvents};
 use crate::render::context::RenderContext;
 use crate::result::ViuiResult;
@@ -16,7 +17,11 @@ impl Element for HStackElement {
     ) {
     }
 
-    fn layout_element(_state: &Self::State, _props: &Self::Props) -> ViuiResult<LayoutConstraints> {
+    fn layout_element(
+        _layout_context: &mut LayoutContext,
+        _state: &mut Self::State,
+        _props: &Self::Props,
+    ) -> ViuiResult<LayoutConstraints> {
         Ok(LayoutConstraints::HorizontalLayout {})
     }
 }

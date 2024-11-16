@@ -5,6 +5,7 @@ use crate::component::eval::eval;
 use crate::component::parser::parse_ui;
 use crate::component::value::ExpressionValue;
 use crate::infrastructure::image_pool::ImagePool;
+use crate::infrastructure::layout_context::LayoutContext;
 use crate::nodes::data::{LayoutInfo, NodeData, PropExpression};
 use crate::nodes::elements::button::ButtonElement;
 use crate::nodes::elements::hstack::HStackElement;
@@ -378,10 +379,11 @@ impl UI {
             .map(|child_id| (root_layout_node, *child_id))
             .rev()
             .collect();
+        let mut layout_context = LayoutContext::new(&mut self.image_pool);
         while let Some((parent_layout_id, node_id)) = todo.pop() {
             layout_nodes.push(node_id);
-            let node = &self.node_arena[&node_id];
-            let layout_contraints = self.node_registry.layout_node(node)?;
+            let node = &mut self.node_arena[&node_id];
+            let layout_contraints = self.node_registry.layout_node(&mut layout_context, node)?;
             let style = match layout_contraints {
                 LayoutConstraints::FixedLayout { width, height } => Some(Style {
                     size: taffy::Size {
@@ -425,7 +427,8 @@ impl UI {
     }
 
     pub fn make_render_commands(&mut self) -> ViuiResult<Vec<RenderCommand>> {
-        let mut render_context = RenderContext::new(&mut self.image_pool);
+        let mut render_context = RenderContext::new(&mut self.image_pool)?;
+
         let mut todo = vec![self.root_node_idx];
         while let Some(node_idx) = todo.pop() {
             let node = &self.node_arena[&node_idx];
@@ -546,7 +549,7 @@ impl UI {
             || Ok(Box::new(())),
             |_, _, _| Ok(()),
             |_, _| Ok(()),
-            |_| {
+            |_, _| {
                 Ok(LayoutConstraints::FixedLayout {
                     width: 0.0,
                     height: 0.0,

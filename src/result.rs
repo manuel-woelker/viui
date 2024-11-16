@@ -100,6 +100,13 @@ impl From<taffy::TaffyError> for ViuiError {
     }
 }
 
+impl From<image::ImageError> for ViuiError {
+    #[track_caller]
+    fn from(error: image::ImageError) -> Self {
+        Self::new(ViuiErrorKind::General(error.to_string()))
+    }
+}
+
 impl From<String> for ViuiErrorKind {
     #[track_caller]
     fn from(error: String) -> Self {

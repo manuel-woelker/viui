@@ -1,10 +1,12 @@
 use crate::component::ast::NodeAst;
+use crate::infrastructure::layout_context::LayoutContext;
 use crate::nodes::data::NodeData;
 use crate::nodes::elements::kind::LayoutConstraints;
 use crate::nodes::types::{NodeEventHandler, NodeEvents, NodeProps, NodeRenderFn, NodeState};
 use crate::result::ViuiResult;
 
-pub type LayoutFn = Box<dyn Fn(&NodeData) -> ViuiResult<LayoutConstraints> + Send>;
+pub type LayoutFn =
+    Box<dyn Fn(&mut LayoutContext, &mut NodeData) -> ViuiResult<LayoutConstraints> + Send>;
 
 pub struct NodeDescriptor {
     pub(crate) kind_index: usize,

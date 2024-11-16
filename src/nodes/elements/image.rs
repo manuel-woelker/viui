@@ -1,16 +1,17 @@
+use crate::infrastructure::layout_context::LayoutContext;
 use crate::nodes::elements::kind::{Element, LayoutConstraints, NoEvents};
-use crate::nodes::types::NodeProps;
-use crate::render::command::{ImageId, RenderCommand};
+use crate::nodes::types::{NodeProps, NodeState};
+use crate::render::command::RenderCommand;
 use crate::render::context::RenderContext;
-use crate::resource::Resource;
 use crate::result::ViuiResult;
+use crate::types::Float;
 use bevy_reflect::Reflect;
 
 pub struct ImageElement {}
 
 impl Element for ImageElement {
     const NAME: &'static str = "image";
-    type State = ();
+    type State = ImageElementState;
     type Props = ImageElementProps;
     type Events = NoEvents;
     fn render_element(
@@ -22,10 +23,15 @@ impl Element for ImageElement {
         render_context.add_command(RenderCommand::DrawImage { image_id });
     }
 
-    fn layout_element(_state: &Self::State, _props: &Self::Props) -> ViuiResult<LayoutConstraints> {
+    fn layout_element(
+        layout_context: &mut LayoutContext,
+        _state: &mut Self::State,
+        props: &Self::Props,
+    ) -> ViuiResult<LayoutConstraints> {
+        let size = layout_context.get_image_size(&props.src)?;
         Ok(LayoutConstraints::FixedLayout {
-            width: 512.0,
-            height: 512.0,
+            width: size.width,
+            height: size.height,
         })
     }
 }
@@ -36,3 +42,10 @@ pub struct ImageElementProps {
 }
 
 impl NodeProps for ImageElementProps {}
+
+#[derive(Default, Reflect, Debug)]
+pub struct ImageElementState {
+    pub width: Float,
+    pub height: Float,
+}
+impl NodeState for ImageElementState {}

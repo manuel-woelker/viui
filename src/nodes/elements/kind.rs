@@ -1,3 +1,4 @@
+use crate::infrastructure::layout_context::LayoutContext;
 use crate::nodes::events::InputEvent;
 use crate::nodes::types::{NodeEvents, NodeProps, NodeState};
 use crate::render::context::RenderContext;
@@ -22,7 +23,11 @@ pub trait Element {
     }
     fn render_element(render_context: &mut RenderContext, state: &Self::State, props: &Self::Props);
 
-    fn layout_element(state: &Self::State, props: &Self::Props) -> ViuiResult<LayoutConstraints>;
+    fn layout_element(
+        layout_context: &mut LayoutContext,
+        state: &mut Self::State,
+        props: &Self::Props,
+    ) -> ViuiResult<LayoutConstraints>;
 }
 
 pub enum LayoutConstraints {

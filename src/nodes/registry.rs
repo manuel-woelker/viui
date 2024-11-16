@@ -1,5 +1,6 @@
 use crate::component::ast::NodeAst;
 use crate::err;
+use crate::infrastructure::layout_context::LayoutContext;
 use crate::nodes::data::NodeData;
 use crate::nodes::descriptor::{LayoutFn, NodeDescriptor};
 use crate::nodes::elements::kind::{Element, EventTrigger, LayoutConstraints};
@@ -37,7 +38,9 @@ impl NodeRegistry {
             + Send
             + 'static,
         render_fn: impl Fn(&mut RenderContext, &NodeData) -> ViuiResult<()> + Send + 'static,
-        layout_fn: impl Fn(&NodeData) -> ViuiResult<LayoutConstraints> + Send + 'static,
+        layout_fn: impl Fn(&mut LayoutContext, &mut NodeData) -> ViuiResult<LayoutConstraints>
+            + Send
+            + 'static,
         children: Vec<NodeAst>,
     ) {
         self.register_internal(
@@ -95,10 +98,13 @@ impl NodeRegistry {
                 T::render_element(render_context, state, props);
                 Ok(())
             }),
-            Box::new(|node_data: &NodeData| {
-                let (state, props) = node_data.cast_state_and_props::<T::State, T::Props>()?;
-                T::layout_element(state, props)
-            }),
+            Box::new(
+                |layout_context: &mut LayoutContext, node_data: &mut NodeData| {
+                    let (state, props) =
+                        node_data.cast_state_mut_and_props::<T::State, T::Props>()?;
+                    T::layout_element(layout_context, state, props)
+                },
+            ),
             vec![],
         );
     }
@@ -135,7 +141,11 @@ impl NodeRegistry {
     ) -> ViuiResult<()> {
         (self.nodes[node_data.kind_index()].render_fn)(render_context, node_data)
     }
-    pub fn layout_node(&self, node_data: &NodeData) -> ViuiResult<LayoutConstraints> {
-        (self.nodes[node_data.kind_index()].layout_fn)(node_data)
+    pub fn layout_node(
+        &self,
+        layout_context: &mut LayoutContext,
+        node_data: &mut NodeData,
+    ) -> ViuiResult<LayoutConstraints> {
+        (self.nodes[node_data.kind_index()].layout_fn)(layout_context, node_data)
     }
 }

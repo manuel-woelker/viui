@@ -9,11 +9,22 @@ pub struct RenderContext<'a> {
 }
 
 impl<'a> RenderContext<'a> {
-    pub fn new(image_pool: &'a mut ImagePool) -> Self {
-        Self {
-            render_queue: Default::default(),
-            image_pool,
+    pub fn new(image_pool: &'a mut ImagePool) -> ViuiResult<Self> {
+        let mut render_queue = vec![];
+        // Add images to render queue
+        // TODO: handle multiple backends
+        for image_path in std::mem::take(&mut image_pool.images_to_load) {
+            let image_id = image_pool.get_image_id(&image_path)?;
+            render_queue.push(RenderCommand::LoadImage {
+                image_id,
+                resource: Resource::new(image_path),
+            });
         }
+
+        Ok(Self {
+            render_queue,
+            image_pool,
+        })
     }
 }
 impl RenderContext<'_> {
@@ -22,16 +33,7 @@ impl RenderContext<'_> {
     }
 
     pub fn get_image_id(&mut self, path: &str) -> ViuiResult<ImageId> {
-        if let Some(image_id) = self.image_pool.get(path) {
-            return Ok(image_id);
-        }
-        let image_id = self.image_pool.new_image_id();
-        self.add_command(RenderCommand::LoadImage {
-            image_id,
-            resource: Resource::new(path),
-        });
-        self.image_pool.set(path, image_id);
-        Ok(image_id)
+        self.image_pool.get_image_id(path)
     }
 
     pub fn render_queue(self) -> Vec<RenderCommand> {
