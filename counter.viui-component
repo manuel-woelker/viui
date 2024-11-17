@@ -1,10 +1,11 @@
 component CounterComponent {
+	label(label=`Counter: ${counter}`)
+	LabelComponent()
 	hstack {
 		label(label=`A`)
 		label(label=`B`)
 	}
 	image(src="assets/images/cat_playing.jpg")
-	LabelComponent()
 	label(label=`Counter: ${counter}`)
 	button(label="Increment" @click=Increment)
 	button(label="Decrement" @click=Decrement)

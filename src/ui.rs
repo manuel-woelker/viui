@@ -415,13 +415,19 @@ impl UI {
             self.node_arena[&node_id].layout_id = layout_id;
         }
         tree.compute_layout(root_layout_node, taffy::Size::max_content())?;
-        for node_id in layout_nodes {
+        let mut todo = vec![(0.0, 0.0, self.root_node_idx)];
+        while let Some((parent_x, parent_y, node_id)) = todo.pop() {
             let node = &mut self.node_arena[&node_id];
             let layout = tree.layout(node.layout_id)?;
+            let x = parent_x + layout.location.x;
+            let y = parent_y + layout.location.y;
             node.layout.bounds = Rect::new(
-                Point::new(layout.location.x, layout.location.y),
+                Point::new(x, y),
                 Size::new(layout.size.width, layout.size.height),
             );
+            for child in &node.children {
+                todo.push((x, y, *child));
+            }
         }
         Ok(())
     }
