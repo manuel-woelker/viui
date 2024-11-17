@@ -13,7 +13,7 @@ impl<'a> LayoutContext<'a> {
 }
 
 impl LayoutContext<'_> {
-    pub fn get_image_size(&mut self, path: &String) -> ViuiResult<Size> {
+    pub fn get_image_size(&mut self, path: &str) -> ViuiResult<Size> {
         self.image_pool.get_image_size(path)
     }
 }

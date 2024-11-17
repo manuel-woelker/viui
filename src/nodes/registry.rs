@@ -29,6 +29,7 @@ impl NodeRegistry {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn register(
         &mut self,
         name: impl Into<String>,
@@ -54,6 +55,7 @@ impl NodeRegistry {
         );
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn register_internal(
         &mut self,
         name: String,

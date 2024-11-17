@@ -498,7 +498,7 @@ impl UI {
             let ast = parse_ui(&string)?;
             let ast_data = ast.into_data();
             for component in &ast_data.components {
-                self.register_component_node(&component);
+                self.register_component_node(component);
             }
             self.set_root_node()?;
             Ok(())
