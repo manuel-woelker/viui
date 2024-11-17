@@ -1,6 +1,6 @@
 use rand::random;
 use rgb::bytemuck::Contiguous;
-use std::fmt::Debug;
+use std::fmt::{Debug, Formatter};
 use std::num::NonZeroU16;
 use std::ops::{Index, IndexMut};
 
@@ -9,6 +9,18 @@ pub struct Arenal<T> {
     entries: Vec<Entry<T>>,
 }
 
+impl<T: Debug> Debug for Arenal<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Arenal {{ entries: ")?;
+        for entry in &self.entries {
+            if let Entry::Occupied(e) = entry {
+                writeln!(f, "    {:?}", e.value)?;
+            }
+        }
+        writeln!(f, "}}")?;
+        Ok(())
+    }
+}
 type OffsetType = u32;
 type ArenalId = u16;
 type Generation = NonZeroU16;

@@ -521,6 +521,7 @@ impl UI {
         }
         let component = self.node_registry.get_node_by_name(name)?;
         Ok(self.node_arena.insert(NodeData {
+            tag: name.to_string(),
             kind_index,
             state: (component.make_state)()?,
             props: (component.make_props)()?,
@@ -544,7 +545,7 @@ impl UI {
         for child in &child.children {
             children.push(self.create_child(child)?)
         }
-        self.set_children(&node_idx, children);
+        self.add_children(&node_idx, children);
         Ok(node_idx)
     }
 
@@ -555,18 +556,18 @@ impl UI {
             || Ok(Box::new(())),
             |_, _, _| Ok(()),
             |_, _| Ok(()),
-            |_, _| {
-                Ok(LayoutConstraints::FixedLayout {
-                    width: 0.0,
-                    height: 0.0,
-                })
-            },
+            |_, _| Ok(LayoutConstraints::Passthrough {}),
             component_ast.children.clone(),
         )
     }
 
+    #[allow(dead_code)]
     fn set_children(&mut self, parent: &Idx<NodeData>, children: Vec<Idx<NodeData>>) {
         self.node_arena.index_mut(parent).children = children;
+    }
+
+    fn add_children(&mut self, parent: &Idx<NodeData>, children: Vec<Idx<NodeData>>) {
+        self.node_arena.index_mut(parent).children.extend(children);
     }
 }
 

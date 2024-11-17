@@ -6,9 +6,11 @@ use crate::result::ViuiResult;
 use crate::types::Rect;
 use std::any::type_name;
 use std::collections::HashMap;
+use std::fmt::{Debug, Formatter};
 use taffy::NodeId;
 
 pub struct NodeData {
+    pub tag: String,
     pub kind_index: usize,
     pub layout: LayoutInfo,
     pub state: StateBox,
@@ -17,6 +19,12 @@ pub struct NodeData {
     pub prop_expressions: Vec<PropExpression>,
     pub event_mappings: HashMap<String, ExpressionAst>,
     pub layout_id: NodeId,
+}
+
+impl Debug for NodeData {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}()", self.tag)
+    }
 }
 
 #[derive(Clone, Debug, Default)]
