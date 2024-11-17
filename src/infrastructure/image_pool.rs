@@ -1,16 +1,16 @@
 use crate::render::command::ImageId;
+use crate::resource::Resource;
 use crate::result::ViuiResult;
 use crate::types::{Float, Size};
 use image::ImageReader;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::io::BufReader;
 
 #[derive(Debug)]
 pub struct ImageEntry {
     image_id: ImageId,
     #[allow(dead_code)]
-    path: String,
+    resource: Resource,
     size: Size,
 }
 
@@ -27,13 +27,13 @@ impl ImagePool {
         match entry {
             Entry::Occupied(entry) => Ok(entry.into_mut()),
             Entry::Vacant(slot) => {
-                let reader = ImageReader::new(BufReader::new(std::fs::File::open(path)?))
-                    .with_guessed_format()?;
+                let resource = Resource::from_path(path);
+                let reader = ImageReader::new(resource.buf_reader()?).with_guessed_format()?;
                 let (width, height) = reader.into_dimensions()?;
                 let size = Size::new(width as Float, height as Float);
                 let entry = slot.insert(ImageEntry {
                     image_id,
-                    path: path.to_string(),
+                    resource,
                     size,
                 });
                 self.images_to_load.push(path.to_string());

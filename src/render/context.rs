@@ -17,7 +17,7 @@ impl<'a> RenderContext<'a> {
             let image_id = image_pool.get_image_id(&image_path)?;
             render_queue.push(RenderCommand::LoadImage {
                 image_id,
-                resource: Resource::new(image_path),
+                resource: Resource::from_path(image_path),
             });
         }
 
