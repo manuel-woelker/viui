@@ -129,6 +129,24 @@ impl<'a> Lexer<'a> {
             '`' => {
                 self.push_state(LexerState::TemplateLiteral);
             }
+            '/' => {
+                if self.scanner.eat_if('*') {
+                    let mut depth = 1;
+                    // ignore nested comments
+                    while depth > 0 && !self.scanner.done() {
+                        let Some(char) = self.scanner.eat() else {
+                            break;
+                        };
+                        if char == '/' && self.scanner.eat_if('*') {
+                            depth += 1;
+                        } else if char == '*' && self.scanner.eat_if('/') {
+                            depth -= 1;
+                        }
+                    }
+                } else {
+                    self.create_token(start, TokenKind::Unexpected);
+                }
+            }
             _ => {
                 self.create_token(start, TokenKind::Unexpected);
             }
@@ -351,6 +369,17 @@ mod tests {
         test_component, "component", expect![[r#"
             <Component> 'component' 0+9
             <EOF> '' 9+0
+        "#]];
+        test_comment, "/* foo */", expect![[r#"
+            <EOF> '' 9+0
+        "#]];
+        test_nested_comment, "/* /*foo )*/( */@", expect![[r#"
+            <At> '@' 16+1
+            <EOF> '' 17+0
+        "#]];
+        test_nested_comment2, "/* /*foo )*/( /* */*/@", expect![[r#"
+            <At> '@' 21+1
+            <EOF> '' 22+0
         "#]];
     );
 }
