@@ -1,5 +1,6 @@
 component CounterComponent {
 	LabelComponent()
+	spinner()
 	hstack {
 		label(label=`A`)
 		label(label=`B`)

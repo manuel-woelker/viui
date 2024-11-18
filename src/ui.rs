@@ -13,6 +13,7 @@ use crate::nodes::elements::image::ImageElement;
 use crate::nodes::elements::kind::{Element, LayoutConstraints};
 use crate::nodes::elements::knob::KnobElement;
 use crate::nodes::elements::label::LabelElement;
+use crate::nodes::elements::spinner::SpinnerElement;
 use crate::nodes::events::{InputEvent, MouseEventKind, UiEvent, UiEventKind};
 use crate::nodes::registry::NodeRegistry;
 use crate::nodes::types::NodeEvents;
@@ -20,12 +21,12 @@ use crate::observable_state::ObservableState;
 use crate::render::command::RenderCommand;
 use crate::render::context::RenderContext;
 use crate::result::{context, ViuiResult};
-use crate::types::{Point, Rect, Size};
+use crate::types::{Color, Point, Rect, Size};
 use bevy_reflect::{
     DynamicEnum, DynamicTuple, DynamicVariant, FromReflect, GetPath, Reflect, ReflectRef, TypeInfo,
     Typed, VariantInfo,
 };
-use crossbeam_channel::{select, Receiver, Sender};
+use crossbeam_channel::{select, tick, Receiver, Sender};
 use log::debug;
 use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
@@ -38,7 +39,7 @@ use std::ops::IndexMut;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use taffy::prelude::length;
 use taffy::{FlexDirection, NodeId, Style, TaffyTree};
 use tracing::error;
@@ -62,7 +63,9 @@ pub struct UI {
     file_watcher: Debouncer<RecommendedWatcher>,
     root_node_file: PathBuf,
     active_nodes: Vec<Idx<NodeData>>,
+    animated_nodes: Vec<Idx<NodeData>>,
     image_pool: ImagePool,
+    start: Instant,
 }
 
 struct RenderBackend {
@@ -103,6 +106,7 @@ impl UI {
         node_registry.register_node::<KnobElement>();
         node_registry.register_node::<HStackElement>();
         node_registry.register_node::<ImageElement>();
+        node_registry.register_node::<SpinnerElement>();
         Ok(UI {
             root_component_name,
             node_registry,
@@ -123,6 +127,8 @@ impl UI {
             active_nodes: Default::default(),
             root_node_idx: Default::default(),
             image_pool: Default::default(),
+            start: Instant::now(),
+            animated_nodes: Default::default(),
         })
     }
 
@@ -176,19 +182,24 @@ impl UI {
             .name("VIUI Thread".into())
             .spawn(move || {
                 debug!("Running main loop");
-
+                let ticker = tick(Duration::from_micros(1_000_000 / 60));
                 loop {
                     let result: ViuiResult<()> = (|| {
                         select! {
-                        recv(self.file_change_receiver) -> _event => {
-                            self.load_root_node_file()?;
-                            self.redraw()?;
+                            recv(self.file_change_receiver) -> _event => {
+                                self.load_root_node_file()?;
+                                self.eval_layout_and_redraw()?;
+                            }
+                            recv(self.ui_event_receiver) -> event => {
+                                self.handle_ui_event(event?)?;
+                                self.eval_layout_and_redraw()?;
+                            }
+                            recv(ticker) -> _ => {
+                                if !self.animated_nodes.is_empty() {
+                                    self.redraw()?;
+                                }
+                            }
                         }
-                        recv(self.ui_event_receiver) -> event => {
-                            self.handle_ui_event(event?)?;
-                            self.redraw()?;
-                        }
-                        };
                         Ok(())
                     })();
                     if let Err(err) = result {
@@ -200,9 +211,14 @@ impl UI {
         Ok(())
     }
 
-    pub fn redraw(&mut self) -> ViuiResult<()> {
+    pub fn eval_layout_and_redraw(&mut self) -> ViuiResult<()> {
         self.eval_expressions()?;
         self.perform_layout()?;
+        self.redraw()?;
+        Ok(())
+    }
+
+    fn redraw(&mut self) -> ViuiResult<()> {
         let render_backends = take(&mut self.render_backends);
         for backend in &render_backends {
             let render_commands = self.make_render_commands()?;
@@ -225,7 +241,7 @@ impl UI {
         self.render_backends.push(RenderBackend {
             render_backend_sender,
         });
-        self.redraw()?;
+        self.eval_layout_and_redraw()?;
         Ok(message_receiver)
     }
 
@@ -433,8 +449,14 @@ impl UI {
     }
 
     pub fn make_render_commands(&mut self) -> ViuiResult<Vec<RenderCommand>> {
-        let mut render_context = RenderContext::new(&mut self.image_pool)?;
-
+        let time = self.start.elapsed().as_secs_f32();
+        let animated_nodes = &mut self.animated_nodes;
+        animated_nodes.clear();
+        let mut render_context = RenderContext::new(&mut self.image_pool, time)?;
+        render_context.add_command(RenderCommand::SetFillColor(Color::new(255, 255, 255, 255)));
+        render_context.add_command(RenderCommand::FillRect {
+            rect: Rect::new(Point::new(0.0, 0.0), Size::new(1600.0, 1600.0)),
+        });
         let mut todo = vec![self.root_node_idx];
         while let Some(node_idx) = todo.pop() {
             let node = &self.node_arena[&node_idx];
@@ -448,6 +470,9 @@ impl UI {
                 node.layout.bounds.size,
             )));
             self.node_registry.render_node(&mut render_context, node)?;
+            if render_context.reset_animated() {
+                animated_nodes.push(node_idx);
+            }
             render_context.add_command(RenderCommand::Restore);
             todo.extend(node.children.iter());
         }

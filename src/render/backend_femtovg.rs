@@ -13,6 +13,7 @@ use glutin::display::{Display, GetGlDisplay, GlDisplay};
 use glutin::prelude::GlSurface;
 use glutin::surface::{Surface, SurfaceAttributesBuilder, WindowSurface};
 use glutin_winit::DisplayBuilder;
+use log::info;
 use raw_window_handle::HasRawWindowHandle;
 use std::collections::HashMap;
 use std::num::NonZeroU32;
@@ -117,7 +118,8 @@ impl FemtovgRenderBackend {
                 }
                 Event::UserEvent(message) => {
                     render_list = message.render_commands;
-                    window.request_redraw();
+                    render(&mut render_state, &render_list);
+                    //window.request_redraw();
                 }
                 _ => {}
             }
@@ -185,17 +187,14 @@ fn create_window(
 
 fn render(render_state: &mut RenderState, render_commands: &[RenderCommand]) {
     let RenderState {
-        window,
+        window: _window,
         canvas,
         surface,
         context,
         image_map,
         fonts,
     } = render_state;
-    let size = window.inner_size();
-    canvas.set_size(size.width, size.height, 1.0);
     canvas.reset_transform();
-    canvas.clear_rect(0, 0, size.width, size.height, Color::white());
 
     let mut fill_paint = Paint::color(Color::hsl(0.0, 0.0, 1.0))
         .with_text_baseline(Baseline::Middle)
@@ -210,7 +209,12 @@ fn render(render_state: &mut RenderState, render_commands: &[RenderCommand]) {
         .with_anti_alias(true);
     for command in render_commands {
         match command {
-            RenderCommand::FillRect { .. } => {}
+            RenderCommand::FillRect { rect } => {
+                let mut path = Path::new();
+                path.rect(rect.min_x(), rect.min_y(), rect.width(), rect.height());
+
+                canvas.fill_path(&path, &fill_paint);
+            }
             RenderCommand::FillRoundRect { rect, radius } => {
                 let mut path = Path::new();
                 path.rounded_rect(
@@ -283,6 +287,7 @@ fn render(render_state: &mut RenderState, render_commands: &[RenderCommand]) {
                 );
             }
             RenderCommand::LoadImage { image_id, resource } => {
+                info!("Loading image: {:?}", resource);
                 let femto_id = canvas
                     .load_image_mem(&resource.as_bytes().unwrap(), ImageFlags::empty())
                     .unwrap();

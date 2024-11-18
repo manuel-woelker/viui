@@ -2,14 +2,17 @@ use crate::infrastructure::image_pool::ImagePool;
 use crate::render::command::{ImageId, RenderCommand};
 use crate::resource::Resource;
 use crate::result::ViuiResult;
+use crate::types::Float;
 
 pub struct RenderContext<'a> {
     render_queue: Vec<RenderCommand>,
     image_pool: &'a mut ImagePool,
+    time: Float,
+    is_animated: bool,
 }
 
 impl<'a> RenderContext<'a> {
-    pub fn new(image_pool: &'a mut ImagePool) -> ViuiResult<Self> {
+    pub fn new(image_pool: &'a mut ImagePool, time: Float) -> ViuiResult<Self> {
         let mut render_queue = vec![];
         // Add images to render queue
         // TODO: handle multiple backends
@@ -24,6 +27,8 @@ impl<'a> RenderContext<'a> {
         Ok(Self {
             render_queue,
             image_pool,
+            time,
+            is_animated: false,
         })
     }
 }
@@ -38,5 +43,19 @@ impl RenderContext<'_> {
 
     pub fn render_queue(self) -> Vec<RenderCommand> {
         self.render_queue
+    }
+
+    pub fn time(&self) -> Float {
+        self.time
+    }
+
+    pub fn set_animated(&mut self) {
+        self.is_animated = true;
+    }
+
+    pub fn reset_animated(&mut self) -> bool {
+        let was_animated = self.is_animated;
+        self.is_animated = false;
+        was_animated
     }
 }
