@@ -14,6 +14,7 @@ use crate::nodes::elements::kind::{Element, LayoutConstraints};
 use crate::nodes::elements::knob::KnobElement;
 use crate::nodes::elements::label::LabelElement;
 use crate::nodes::elements::spinner::SpinnerElement;
+use crate::nodes::elements::textinput::TextInputElement;
 use crate::nodes::events::{InputEvent, MouseEventKind, UiEvent, UiEventKind};
 use crate::nodes::registry::NodeRegistry;
 use crate::nodes::types::NodeEvents;
@@ -102,6 +103,7 @@ impl UI {
 
         let mut node_registry = NodeRegistry::new();
         node_registry.register_node::<LabelElement>();
+        node_registry.register_node::<TextInputElement>();
         node_registry.register_node::<ButtonElement>();
         node_registry.register_node::<KnobElement>();
         node_registry.register_node::<HStackElement>();
@@ -282,6 +284,11 @@ impl UI {
                     }
                 }
             }
+            UiEventKind::CharInput(character) => {
+                for node in &self.active_nodes {
+                    add_event_trigger(*node, InputEvent::character(character.character));
+                }
+            }
         }
 
         for (node_idx, event) in events_to_trigger {
@@ -383,8 +390,8 @@ impl UI {
         let root_layout_node = tree.new_leaf(Style {
             flex_direction: FlexDirection::Column,
             size: taffy::Size {
-                width: length(1000.0),
-                height: length(900.0),
+                width: length(1200.0),
+                height: length(1200.0),
             },
             ..Default::default()
         })?;

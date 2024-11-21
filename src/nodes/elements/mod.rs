@@ -5,3 +5,4 @@ pub mod kind;
 pub mod knob;
 pub mod label;
 pub mod spinner;
+pub mod textinput;

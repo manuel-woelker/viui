@@ -38,6 +38,8 @@ impl TryFrom<&dyn Reflect> for ExpressionValue {
     fn try_from(value: &dyn Reflect) -> ViuiResult<Self> {
         Ok(if let Some(value) = value.downcast_ref::<Float>() {
             ExpressionValue::Float(*value)
+        } else if let Some(value) = value.downcast_ref::<String>() {
+            ExpressionValue::String(value.clone())
         } else {
             bail!(
                 "Could not convert value to expression value: {:?} {}",

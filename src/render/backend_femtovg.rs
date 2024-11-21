@@ -72,7 +72,7 @@ impl FemtovgRenderBackend {
                 .expect("Cannot create renderer");
 
         let mut canvas = Canvas::new(renderer).expect("Cannot create canvas");
-        canvas.set_size(1000, 900, window.scale_factor() as f32);
+        canvas.set_size(1200, 1200, window.scale_factor() as f32);
         //        canvas.add_font("assets/fonts/Roboto-Regular.ttf").unwrap();
         let font_id = canvas
             .add_font("assets/fonts/OpenSans-Regular.ttf")
@@ -111,6 +111,10 @@ impl FemtovgRenderBackend {
                         }))
                         .unwrap(),
                     WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                    WindowEvent::ReceivedCharacter(character) => self
+                        .event_sender
+                        .send(UiEvent::character_input(character))
+                        .unwrap(),
                     _ => {}
                 },
                 Event::RedrawRequested(_) => {
@@ -136,7 +140,7 @@ fn create_window(
     Surface<WindowSurface>,
 ) {
     let window_builder = WindowBuilder::new()
-        .with_inner_size(PhysicalSize::new(1000., 900.))
+        .with_inner_size(PhysicalSize::new(1200., 1200.))
         .with_title("viui");
 
     let template = ConfigTemplateBuilder::new().with_alpha_size(8);
@@ -162,8 +166,8 @@ fn create_window(
 
     let attrs = SurfaceAttributesBuilder::<WindowSurface>::new().build(
         window.raw_window_handle(),
-        NonZeroU32::new(1000).unwrap(),
-        NonZeroU32::new(600).unwrap(),
+        NonZeroU32::new(1200).unwrap(),
+        NonZeroU32::new(1200).unwrap(),
     );
 
     let surface = unsafe {

@@ -12,6 +12,7 @@ use viui::ui::UI;
 struct AppState {
     counter: i32,
     gain: Float,
+    name: String,
 }
 
 #[derive(Debug, Reflect, Serialize, Deserialize)]
@@ -19,6 +20,7 @@ enum AppMessage {
     Increment,
     Decrement,
     Set(Float),
+    SetName(String),
 }
 
 fn main() {
@@ -34,9 +36,11 @@ fn main_internal() -> ViuiResult<()> {
     let app_state = ObservableState::new(AppState {
         counter: 3,
         gain: 3.0,
+        name: "Bob".to_string(),
     });
     let counter_path = TypedPath::<i32>::new(ParsedPath::parse("counter")?);
     let gain_path = TypedPath::<Float>::new(ParsedPath::parse("gain")?);
+    let name_path = TypedPath::<String>::new(ParsedPath::parse("name")?);
     let mut ui = UI::new(
         app_state,
         "CounterComponent".to_string(),
@@ -54,6 +58,11 @@ fn main_internal() -> ViuiResult<()> {
             AppMessage::Set(value) => {
                 app_state.apply_change(format!("Set to {}", value), |mutator| {
                     mutator.mutate(&gain_path, |gain| *gain = *value);
+                });
+            }
+            AppMessage::SetName(new_name) => {
+                app_state.apply_change("Set name", |mutator| {
+                    mutator.mutate(&name_path, |name| *name = new_name.to_string());
                 });
             }
         },

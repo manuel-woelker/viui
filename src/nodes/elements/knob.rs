@@ -51,6 +51,7 @@ impl Element for KnobElement {
                     event_trigger(KnobEvents::Change { new_value });
                 }
             }
+            _ => (),
         }
     }
 

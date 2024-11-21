@@ -1,4 +1,5 @@
 component CounterComponent {
+	textinput(text=name @change=SetName(new_value))
 	LabelComponent()
 	spinner()
 	hstack {
