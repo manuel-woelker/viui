@@ -1,3 +1,4 @@
+use crate::infrastructure::font_pool::FontIndex;
 use crate::resource::Resource;
 use crate::types::{Color, Float, Point, Rect};
 
@@ -38,6 +39,13 @@ pub enum RenderCommand {
     LoadImage {
         image_id: ImageId,
         resource: Resource,
+    },
+    LoadFont {
+        font_idx: FontIndex,
+        resource: Resource,
+    },
+    SetFont {
+        font_idx: FontIndex,
     },
     DrawImage {
         image_id: ImageId,

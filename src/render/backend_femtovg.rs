@@ -1,3 +1,4 @@
+use crate::infrastructure::font_pool::FontIndex;
 use crate::nodes::events::{MouseEventKind, UiEvent};
 use crate::render::command::{ImageId, RenderCommand};
 use crate::types::Point;
@@ -35,7 +36,7 @@ pub struct RenderState<'a> {
     window: &'a Window,
     canvas: &'a mut Canvas<OpenGl>,
     image_map: &'a mut HashMap<ImageId, femtovg::ImageId>,
-    fonts: &'a [FontId],
+    font_map: &'a mut HashMap<FontIndex, FontId>,
 }
 
 impl FemtovgRenderBackend {
@@ -73,13 +74,9 @@ impl FemtovgRenderBackend {
 
         let mut canvas = Canvas::new(renderer).expect("Cannot create canvas");
         canvas.set_size(1200, 1200, 1.0);
-        //        canvas.add_font("assets/fonts/Roboto-Regular.ttf").unwrap();
-        let font_id = canvas
-            .add_font("assets/fonts/OpenSans-Regular.ttf")
-            .unwrap();
-        let fonts = vec![font_id];
         let mut render_list: Vec<RenderCommand> = Vec::new();
         let mut image_map = Default::default();
+        let mut font_map = Default::default();
         event_loop.run(move |event, _target, control_flow| {
             let mut render_state = RenderState {
                 context: &context,
@@ -87,7 +84,7 @@ impl FemtovgRenderBackend {
                 window: &window,
                 canvas: &mut canvas,
                 image_map: &mut image_map,
-                fonts: &fonts,
+                font_map: &mut font_map,
             };
             *control_flow = ControlFlow::Wait;
             match event {
@@ -196,17 +193,15 @@ fn render(render_state: &mut RenderState, render_commands: &[RenderCommand]) {
         surface,
         context,
         image_map,
-        fonts,
+        font_map,
     } = render_state;
     canvas.reset_transform();
     let mut fill_paint = Paint::color(Color::hsl(0.0, 0.0, 1.0))
         .with_text_baseline(Baseline::Middle)
         .with_font_size(20.0)
-        .with_font(fonts)
         .with_anti_alias(true);
     let mut stroke_paint = Paint::color(Color::hsl(0.0, 0.0, 0.0))
         .with_text_baseline(Baseline::Middle)
-        .with_font(fonts)
         .with_font_size(25.0)
         .with_line_width(0.5)
         .with_anti_alias(true);
@@ -303,6 +298,15 @@ fn render(render_state: &mut RenderState, render_commands: &[RenderCommand]) {
                 let mut path = Path::new();
                 path.rect(0.0, 0.0, iw as f32, ih as f32);
                 canvas.fill_path(&path, &img_paint);
+            }
+            RenderCommand::LoadFont { font_idx, resource } => {
+                info!("Loading font: {:?}", resource);
+                let femto_id = canvas.add_font_mem(&resource.as_bytes().unwrap()).unwrap();
+                font_map.insert(*font_idx, femto_id);
+            }
+            RenderCommand::SetFont { font_idx } => {
+                let femto_id = font_map[font_idx];
+                stroke_paint.set_font(&[femto_id]);
             }
         }
     }

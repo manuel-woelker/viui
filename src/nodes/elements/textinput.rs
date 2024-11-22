@@ -1,5 +1,4 @@
 use crate::infrastructure::layout_context::LayoutContext;
-use crate::infrastructure::measure_text::TextMeasurer;
 use crate::nodes::elements::kind::{Element, EventTrigger, LayoutConstraints};
 use crate::nodes::events::{InputEvent, InputEventKind};
 use crate::nodes::types::{NodeEvents, NodeProps, NodeState};
@@ -58,13 +57,10 @@ impl Element for TextInputElement {
 
         render_context.add_command(RenderCommand::SetFillColor(Color::new(0, 0, 0, 255)));
         if state.is_editing && render_context.time() % 1.0 < 0.5 {
-            let size = TextMeasurer::from_resource("assets/fonts/OpenSans-Regular.ttf")
-                .unwrap()
-                .measure_text(&props.text, 25.0)
-                .unwrap();
+            let size = render_context.measure_text(&props.text).unwrap();
             render_context.add_command(RenderCommand::FillRect {
                 rect: Rect::new(
-                    Point::new(12.0 + size.width, stroke_width + 2.0),
+                    Point::new(13.0 + size.width, stroke_width + 2.0),
                     Size::new(2.0, 30.0),
                 ),
             });

@@ -4,6 +4,7 @@ use crate::component::ast::{ComponentAst, ExpressionAst, NodeAst};
 use crate::component::eval::eval;
 use crate::component::parser::parse_ui;
 use crate::component::value::ExpressionValue;
+use crate::infrastructure::font_pool::{FontIndex, FontPool};
 use crate::infrastructure::image_pool::ImagePool;
 use crate::infrastructure::layout_context::LayoutContext;
 use crate::nodes::data::{LayoutInfo, NodeData, PropExpression};
@@ -21,6 +22,7 @@ use crate::nodes::types::NodeEvents;
 use crate::observable_state::ObservableState;
 use crate::render::command::RenderCommand;
 use crate::render::context::RenderContext;
+use crate::resource::Resource;
 use crate::result::{context, ViuiResult};
 use crate::types::{Color, Point, Rect, Size};
 use bevy_reflect::{
@@ -66,11 +68,13 @@ pub struct UI {
     active_nodes: Vec<Idx<NodeData>>,
     animated_nodes: Vec<Idx<NodeData>>,
     image_pool: ImagePool,
+    font_pool: FontPool,
     start: Instant,
 }
 
 struct RenderBackend {
     render_backend_sender: Sender<RenderBackendMessage>,
+    maximum_font_index_loaded: usize,
 }
 
 pub struct RenderBackendMessage {
@@ -109,6 +113,8 @@ impl UI {
         node_registry.register_node::<HStackElement>();
         node_registry.register_node::<ImageElement>();
         node_registry.register_node::<SpinnerElement>();
+        let mut font_pool = FontPool::new();
+        font_pool.load_font(Resource::from_path("assets/fonts/Quicksand-Regular.ttf"))?;
         Ok(UI {
             root_component_name,
             node_registry,
@@ -129,6 +135,7 @@ impl UI {
             active_nodes: Default::default(),
             root_node_idx: Default::default(),
             image_pool: Default::default(),
+            font_pool,
             start: Instant::now(),
             animated_nodes: Default::default(),
         })
@@ -221,9 +228,9 @@ impl UI {
     }
 
     fn redraw(&mut self) -> ViuiResult<()> {
-        let render_backends = take(&mut self.render_backends);
-        for backend in &render_backends {
-            let render_commands = self.make_render_commands()?;
+        let mut render_backends = take(&mut self.render_backends);
+        for backend in &mut render_backends {
+            let render_commands = self.make_render_commands(backend)?;
             backend
                 .render_backend_sender
                 .send(RenderBackendMessage { render_commands })
@@ -242,6 +249,7 @@ impl UI {
             crossbeam_channel::bounded::<RenderBackendMessage>(4);
         self.render_backends.push(RenderBackend {
             render_backend_sender,
+            maximum_font_index_loaded: 0,
         });
         self.eval_layout_and_redraw()?;
         Ok(message_receiver)
@@ -455,11 +463,36 @@ impl UI {
         Ok(())
     }
 
-    pub fn make_render_commands(&mut self) -> ViuiResult<Vec<RenderCommand>> {
+    fn make_render_commands(
+        &mut self,
+        backend: &mut RenderBackend,
+    ) -> ViuiResult<Vec<RenderCommand>> {
         let time = self.start.elapsed().as_secs_f32();
+
         let animated_nodes = &mut self.animated_nodes;
         animated_nodes.clear();
-        let mut render_context = RenderContext::new(&mut self.image_pool, time)?;
+
+        let mut initial_commands = vec![];
+        let maximum_font_index = self.font_pool.maximum_font_index();
+        if maximum_font_index > backend.maximum_font_index_loaded {
+            for (font_index, font) in self
+                .font_pool
+                .get_fonts_from(backend.maximum_font_index_loaded)
+            {
+                initial_commands.push(RenderCommand::LoadFont {
+                    font_idx: font_index,
+                    resource: font.resource().clone(),
+                });
+            }
+            backend.maximum_font_index_loaded = maximum_font_index;
+        }
+        let mut render_context =
+            RenderContext::new(&mut self.image_pool, &mut self.font_pool, time)?;
+        render_context.add_commands(initial_commands);
+        render_context.add_command(RenderCommand::SetFont {
+            font_idx: FontIndex::new(0),
+        });
+
         render_context.add_command(RenderCommand::SetFillColor(Color::new(255, 255, 255, 255)));
         render_context.add_command(RenderCommand::FillRect {
             rect: Rect::new(Point::new(0.0, 0.0), Size::new(1600.0, 1600.0)),

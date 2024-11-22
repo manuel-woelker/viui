@@ -1,8 +1,7 @@
-use crate::resource::Resource;
+use crate::infrastructure::font_pool::FontData;
 use crate::result::ViuiResult;
 use crate::types::Float;
-use rustybuzz::{shape, Face, UnicodeBuffer};
-use self_cell::self_cell;
+use rustybuzz::{shape, UnicodeBuffer};
 
 #[derive(Debug, Default, PartialEq)]
 pub struct TextMeasurement {
@@ -16,33 +15,19 @@ impl TextMeasurement {
     }
 }
 
-self_cell!(
-    struct FontData {
-        owner: Box<[u8]>,
-        #[covariant]
-        dependent: FaceInfo,
-    }
-);
-
-struct FaceInfo<'font> {
-    face: Face<'font>,
+pub struct TextMeasurer<'a> {
+    face: &'a rustybuzz::Face<'a>,
 }
 
-pub struct TextMeasurer {
-    font_data: FontData,
-}
-
-impl TextMeasurer {
-    pub fn from_resource<R: Into<Resource>>(resource: R) -> ViuiResult<TextMeasurer> {
-        let font_bytes = resource.into().as_bytes()?;
-        let font_data = FontData::new(font_bytes, |font_bytes| FaceInfo {
-            face: Face::from_slice(&font_bytes, 0).unwrap(),
-        });
-        Ok(TextMeasurer { font_data })
+impl<'a> TextMeasurer<'a> {
+    pub fn new(font_data: &'a FontData) -> Self {
+        TextMeasurer {
+            face: font_data.face(),
+        }
     }
 
     pub fn measure_text(&self, string: &str, size: Float) -> ViuiResult<TextMeasurement> {
-        let face = &self.font_data.borrow_dependent().face;
+        let face = self.face;
         let mut buffer = UnicodeBuffer::new();
         buffer.push_str(&string);
         let glyphs = shape(face, &[], buffer);
@@ -64,8 +49,12 @@ pub mod tests {
     use super::*;
 
     // function to create text measurer
-    pub fn create_text_measurer() -> TextMeasurer {
-        TextMeasurer::from_resource("assets/fonts/OpenSans-Regular.ttf").unwrap()
+    fn measure_text(string: &str, size: Float) -> ViuiResult<TextMeasurement> {
+        let font_data = FontCell::from_resource("assets/fonts/OpenSans-Regular.ttf")?;
+        TextMeasurer {
+            face: font_data.face(),
+        }
+        .measure_text(string, size)
     }
 
     #[test]
