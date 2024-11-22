@@ -107,6 +107,17 @@ impl From<image::ImageError> for ViuiError {
     }
 }
 
+impl From<coolor::CoolorError> for ViuiError {
+    #[track_caller]
+    fn from(error: coolor::CoolorError) -> Self {
+        let coolor::CoolorError::InvalidHsl(h, s, l) = error;
+        Self::new(ViuiErrorKind::General(format!(
+            "Invalid hsl: {} {} {}",
+            h, s, l
+        )))
+    }
+}
+
 impl From<ttf_parser::FaceParsingError> for ViuiError {
     #[track_caller]
     fn from(error: ttf_parser::FaceParsingError) -> Self {

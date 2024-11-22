@@ -4,9 +4,10 @@ use crate::component::ast::{ComponentAst, ExpressionAst, NodeAst};
 use crate::component::eval::eval;
 use crate::component::parser::parse_ui;
 use crate::component::value::ExpressionValue;
-use crate::infrastructure::font_pool::{FontIndex, FontPool};
+use crate::infrastructure::font_pool::FontPool;
 use crate::infrastructure::image_pool::ImagePool;
 use crate::infrastructure::layout_context::LayoutContext;
+use crate::infrastructure::styling::Styling;
 use crate::nodes::data::{LayoutInfo, NodeData, PropExpression};
 use crate::nodes::elements::button::ButtonElement;
 use crate::nodes::elements::hstack::HStackElement;
@@ -22,9 +23,10 @@ use crate::nodes::types::NodeEvents;
 use crate::observable_state::ObservableState;
 use crate::render::command::RenderCommand;
 use crate::render::context::RenderContext;
+use crate::render::parameters::RenderParameters;
 use crate::resource::Resource;
 use crate::result::{context, ViuiResult};
-use crate::types::{Color, Point, Rect, Size};
+use crate::types::{Point, Rect, Size};
 use bevy_reflect::{
     DynamicEnum, DynamicTuple, DynamicVariant, FromReflect, GetPath, Reflect, ReflectRef, TypeInfo,
     Typed, VariantInfo,
@@ -70,6 +72,7 @@ pub struct UI {
     image_pool: ImagePool,
     font_pool: FontPool,
     start: Instant,
+    styling: Styling,
 }
 
 struct RenderBackend {
@@ -138,6 +141,8 @@ impl UI {
             font_pool,
             start: Instant::now(),
             animated_nodes: Default::default(),
+            //styling: Styling::light(),
+            styling: Styling::dark(),
         })
     }
 
@@ -495,13 +500,14 @@ impl UI {
             RenderContext::new(&mut self.image_pool, &mut self.font_pool, time)?;
         render_context.add_commands(initial_commands);
         render_context.add_command(RenderCommand::SetFont {
-            font_idx: FontIndex::new(0),
+            font_idx: self.styling.font_face,
         });
 
-        render_context.add_command(RenderCommand::SetFillColor(Color::new(255, 255, 255, 255)));
+        render_context.add_command(RenderCommand::SetFillColor(self.styling.background_color));
         render_context.add_command(RenderCommand::FillRect {
             rect: Rect::new(Point::new(0.0, 0.0), Size::new(1600.0, 1600.0)),
         });
+        let render_parameters = RenderParameters::new(&self.styling)?;
         let mut todo = vec![self.root_node_idx];
         while let Some(node_idx) = todo.pop() {
             let node = &self.node_arena[&node_idx];
@@ -514,7 +520,9 @@ impl UI {
                 Point::new(0.0, 0.0),
                 node.layout.bounds.size,
             )));
-            self.node_registry.render_node(&mut render_context, node)?;
+
+            self.node_registry
+                .render_node(&mut render_context, &render_parameters, node)?;
             if render_context.reset_animated() {
                 animated_nodes.push(node_idx);
             }
@@ -625,7 +633,7 @@ impl UI {
             || Ok(Box::new(())),
             || Ok(Box::new(())),
             |_, _, _| Ok(()),
-            |_, _| Ok(()),
+            |_, _, _| Ok(()),
             |_, _| Ok(LayoutConstraints::Passthrough {}),
             component_ast.children.clone(),
         )

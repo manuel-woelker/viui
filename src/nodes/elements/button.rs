@@ -4,8 +4,9 @@ use crate::nodes::events::{InputEvent, InputEventKind};
 use crate::nodes::types::{NodeEvents, NodeProps, NodeState};
 use crate::render::command::RenderCommand;
 use crate::render::context::RenderContext;
+use crate::render::parameters::RenderParameters;
 use crate::result::ViuiResult;
-use crate::types::{Color, Point, Rect, Size};
+use crate::types::{Point, Rect, Size};
 use bevy_reflect::Reflect;
 
 pub struct ButtonElement {}
@@ -42,17 +43,20 @@ impl Element for ButtonElement {
 
     fn render_element(
         render_context: &mut RenderContext,
+        parameters: &RenderParameters,
         state: &Self::State,
         props: &Self::Props,
     ) {
+        let styling = parameters.styling();
         if state.is_pressed {
-            render_context.add_command(RenderCommand::SetFillColor(Color::new(250, 250, 250, 255)));
+            render_context.add_command(RenderCommand::SetFillColor(styling.button_pressed_color));
         } else if state.is_hovering {
-            render_context.add_command(RenderCommand::SetFillColor(Color::new(230, 230, 230, 255)));
+            render_context.add_command(RenderCommand::SetFillColor(styling.button_hover_color));
         } else {
-            render_context.add_command(RenderCommand::SetFillColor(Color::new(220, 220, 220, 255)));
+            render_context.add_command(RenderCommand::SetFillColor(styling.button_color));
         }
         let stroke_width = 2.0f32;
+        render_context.add_command(RenderCommand::SetStrokeColor(styling.text_color));
         render_context.add_command(RenderCommand::SetStrokeWidth(2.0));
         render_context.add_command(RenderCommand::FillRoundRect {
             rect: Rect::new(

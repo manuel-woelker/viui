@@ -1,11 +1,11 @@
 use crate::infrastructure::font_pool::FontIndex;
 use crate::nodes::events::{KeyboardKey, MouseEventKind, UiEvent};
 use crate::render::command::{ImageId, RenderCommand};
-use crate::types::Point;
+use crate::types::{Color, Point};
 use crate::ui::RenderBackendMessage;
 use crossbeam_channel::{Receiver, Sender};
 use femtovg::renderer::OpenGl;
-use femtovg::{Baseline, Canvas, Color, FontId, ImageFlags, Paint, Path, Solidity};
+use femtovg::{Baseline, Canvas, FontId, ImageFlags, Paint, Path, Solidity};
 use glutin::config::ConfigTemplateBuilder;
 use glutin::context::{
     ContextAttributesBuilder, NotCurrentGlContextSurfaceAccessor, PossiblyCurrentContext,
@@ -216,11 +216,11 @@ fn render(render_state: &mut RenderState, render_commands: &[RenderCommand]) {
         font_map,
     } = render_state;
     canvas.reset_transform();
-    let mut fill_paint = Paint::color(Color::hsl(0.0, 0.0, 1.0))
+    let mut fill_paint = Paint::color(femtovg::Color::hsl(0.0, 0.0, 1.0))
         .with_text_baseline(Baseline::Middle)
         .with_font_size(20.0)
         .with_anti_alias(true);
-    let mut stroke_paint = Paint::color(Color::hsl(0.0, 0.0, 0.0))
+    let mut stroke_paint = Paint::color(femtovg::Color::hsl(0.0, 0.0, 0.0))
         .with_text_baseline(Baseline::Middle)
         .with_font_size(25.0)
         .with_line_width(0.5)
@@ -265,10 +265,10 @@ fn render(render_state: &mut RenderState, render_commands: &[RenderCommand]) {
                 canvas.restore();
             }
             RenderCommand::SetFillColor(color) => {
-                fill_paint.set_color(Color::rgba(color.r, color.g, color.b, color.a));
+                fill_paint.set_color(color.into());
             }
             RenderCommand::SetStrokeColor(color) => {
-                stroke_paint.set_color(Color::rgba(color.r, color.g, color.b, color.a));
+                stroke_paint.set_color(color.into());
             }
             RenderCommand::Line { start, end } => {
                 let mut path = Path::new();
@@ -337,4 +337,11 @@ fn render(render_state: &mut RenderState, render_commands: &[RenderCommand]) {
     surface
         .swap_buffers(context)
         .expect("Could not swap buffers");
+}
+
+impl From<&Color> for femtovg::Color {
+    fn from(color: &Color) -> Self {
+        let rgba = color.rgba;
+        femtovg::Color::rgba(rgba.r, rgba.g, rgba.b, rgba.a)
+    }
 }

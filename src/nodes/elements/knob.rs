@@ -4,8 +4,9 @@ use crate::nodes::events::{InputEvent, InputEventKind};
 use crate::nodes::types::{NodeEvents, NodeProps, NodeState};
 use crate::render::command::RenderCommand;
 use crate::render::context::RenderContext;
+use crate::render::parameters::RenderParameters;
 use crate::result::ViuiResult;
-use crate::types::{Color, Float, Point, Rect, Size};
+use crate::types::{Float, Point, Rect, Size};
 use bevy_reflect::Reflect;
 use std::f32::consts::PI;
 
@@ -57,9 +58,11 @@ impl Element for KnobElement {
 
     fn render_element(
         render_context: &mut RenderContext,
+        parameters: &RenderParameters,
         _state: &Self::State,
         props: &Self::Props,
     ) {
+        let styling = parameters.styling();
         // clamp value to min and max
         let value = props.value.clamp(props.min_value, props.max_value);
         let relative_value = (value - props.min_value) / (props.max_value - props.min_value);
@@ -67,8 +70,8 @@ impl Element for KnobElement {
         let max_angle = 2.25 * PI;
         let angle = min_angle + relative_value * (max_angle - min_angle);
         render_context.add_command(RenderCommand::SetStrokeWidth(2.0));
-        render_context.add_command(RenderCommand::SetStrokeColor(Color::new(0, 0, 0, 255)));
-        render_context.add_command(RenderCommand::SetFillColor(Color::new(240, 240, 240, 255)));
+        render_context.add_command(RenderCommand::SetStrokeColor(styling.border_color));
+        render_context.add_command(RenderCommand::SetFillColor(styling.button_color));
         render_context.add_command(RenderCommand::Translate { x: 10.0, y: 20.0 });
         render_context.add_command(RenderCommand::FillRoundRect {
             rect: Rect::new(Point::new(10.0, 10.0), Size::new(40.0, 40.0)),
@@ -86,9 +89,7 @@ impl Element for KnobElement {
             start: Point::new(start_x, start_y),
             end: Point::new(end_x, end_y),
         });
-        render_context.add_command(RenderCommand::SetStrokeColor(Color::new(
-            220, 220, 220, 255,
-        )));
+        render_context.add_command(RenderCommand::SetStrokeColor(styling.inactive_color));
         render_context.add_command(RenderCommand::SetStrokeWidth(3.0));
         render_context.add_command(RenderCommand::Arc {
             center: Point::new(30.0, 30.0),
@@ -96,7 +97,7 @@ impl Element for KnobElement {
             start_angle: min_angle,
             end_angle: max_angle,
         });
-        render_context.add_command(RenderCommand::SetStrokeColor(Color::new(200, 0, 0, 255)));
+        render_context.add_command(RenderCommand::SetStrokeColor(styling.highlight_color));
         render_context.add_command(RenderCommand::Arc {
             center: Point::new(30.0, 30.0),
             radius: 30.0,
@@ -104,7 +105,7 @@ impl Element for KnobElement {
             end_angle: angle,
         });
 
-        render_context.add_command(RenderCommand::SetStrokeColor(Color::new(0, 0, 0, 255)));
+        render_context.add_command(RenderCommand::SetStrokeColor(styling.text_color));
         render_context.add_command(RenderCommand::Translate { x: 10.0, y: 80.0 });
         render_context.add_command(RenderCommand::DrawText(props.label.clone()));
     }

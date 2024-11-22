@@ -281,6 +281,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "coolor"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "691defa50318376447a73ced869862baecfab35f6aabaa91a4cd726b315bfe1a"
+
+[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1825,6 +1831,7 @@ version = "0.1.0"
 dependencies = [
  "assertables",
  "bevy_reflect",
+ "coolor",
  "crossbeam-channel",
  "error-stack",
  "euclid",

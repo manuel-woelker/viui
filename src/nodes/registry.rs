@@ -7,6 +7,7 @@ use crate::nodes::elements::kind::{Element, EventTrigger, LayoutConstraints};
 use crate::nodes::events::InputEvent;
 use crate::nodes::types::{NodeEventHandler, NodeEvents, NodeProps, NodeRenderFn, NodeState};
 use crate::render::context::RenderContext;
+use crate::render::parameters::RenderParameters;
 use crate::result::ViuiResult;
 use std::collections::HashMap;
 
@@ -38,7 +39,9 @@ impl NodeRegistry {
         event_handler: impl Fn(InputEvent, &mut NodeData, &mut EventTrigger<Box<dyn NodeEvents>>) -> ViuiResult<()>
             + Send
             + 'static,
-        render_fn: impl Fn(&mut RenderContext, &NodeData) -> ViuiResult<()> + Send + 'static,
+        render_fn: impl Fn(&mut RenderContext, &RenderParameters, &NodeData) -> ViuiResult<()>
+            + Send
+            + 'static,
         layout_fn: impl Fn(&mut LayoutContext, &mut NodeData) -> ViuiResult<LayoutConstraints>
             + Send
             + 'static,
@@ -95,11 +98,15 @@ impl NodeRegistry {
                     Ok(())
                 },
             ),
-            Box::new(|render_context: &mut RenderContext, node_data: &NodeData| {
-                let (state, props) = node_data.cast_state_and_props::<T::State, T::Props>()?;
-                T::render_element(render_context, state, props);
-                Ok(())
-            }),
+            Box::new(
+                |render_context: &mut RenderContext,
+                 render_parameters: &RenderParameters,
+                 node_data: &NodeData| {
+                    let (state, props) = node_data.cast_state_and_props::<T::State, T::Props>()?;
+                    T::render_element(render_context, render_parameters, state, props);
+                    Ok(())
+                },
+            ),
             Box::new(
                 |layout_context: &mut LayoutContext, node_data: &mut NodeData| {
                     let (state, props) =
@@ -139,9 +146,10 @@ impl NodeRegistry {
     pub fn render_node(
         &self,
         render_context: &mut RenderContext,
+        render_parameters: &RenderParameters,
         node_data: &NodeData,
     ) -> ViuiResult<()> {
-        (self.nodes[node_data.kind_index()].render_fn)(render_context, node_data)
+        (self.nodes[node_data.kind_index()].render_fn)(render_context, render_parameters, node_data)
     }
     pub fn layout_node(
         &self,

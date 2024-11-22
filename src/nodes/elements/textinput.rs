@@ -4,8 +4,9 @@ use crate::nodes::events::{InputEvent, InputEventKind, KeyboardKey};
 use crate::nodes::types::{NodeEvents, NodeProps, NodeState};
 use crate::render::command::RenderCommand;
 use crate::render::context::RenderContext;
+use crate::render::parameters::RenderParameters;
 use crate::result::ViuiResult;
-use crate::types::{Color, Point, Rect, Size};
+use crate::types::{Point, Rect, Size};
 use bevy_reflect::Reflect;
 
 pub struct TextInputElement {}
@@ -80,12 +81,14 @@ impl Element for TextInputElement {
 
     fn render_element(
         render_context: &mut RenderContext,
+        parameters: &RenderParameters,
         state: &Self::State,
         props: &Self::Props,
     ) {
+        let styling = parameters.styling();
         let stroke_width = 2.0f32;
-        render_context.add_command(RenderCommand::SetStrokeColor(Color::new(0, 0, 0, 255)));
-        render_context.add_command(RenderCommand::SetFillColor(Color::new(255, 255, 255, 255)));
+        render_context.add_command(RenderCommand::SetStrokeColor(styling.border_color));
+        render_context.add_command(RenderCommand::SetFillColor(styling.background_color));
         render_context.add_command(RenderCommand::SetStrokeWidth(2.0));
         render_context.add_command(RenderCommand::FillRoundRect {
             rect: Rect::new(
@@ -95,7 +98,7 @@ impl Element for TextInputElement {
             radius: 2.0,
         });
 
-        render_context.add_command(RenderCommand::SetFillColor(Color::new(0, 0, 0, 255)));
+        render_context.add_command(RenderCommand::SetFillColor(styling.text_color));
         if let Some(mut edit_position) = state.edit_position {
             edit_position = edit_position.clamp(0, props.text.len());
             if render_context.time() % 1.0 < 0.5 {

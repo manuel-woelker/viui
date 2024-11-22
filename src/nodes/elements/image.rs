@@ -3,6 +3,7 @@ use crate::nodes::elements::kind::{Element, LayoutConstraints, NoEvents};
 use crate::nodes::types::{NodeProps, NodeState};
 use crate::render::command::RenderCommand;
 use crate::render::context::RenderContext;
+use crate::render::parameters::RenderParameters;
 use crate::result::ViuiResult;
 use crate::types::Float;
 use bevy_reflect::Reflect;
@@ -16,6 +17,7 @@ impl Element for ImageElement {
     type Events = NoEvents;
     fn render_element(
         render_context: &mut RenderContext,
+        _parameters: &RenderParameters,
         _state: &Self::State,
         props: &Self::Props,
     ) {
