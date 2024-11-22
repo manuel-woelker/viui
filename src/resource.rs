@@ -1,5 +1,4 @@
 use crate::result::ViuiResult;
-use log::info;
 use std::io::{BufRead, BufReader, Seek};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -24,14 +23,20 @@ impl Resource {
         }
     }
 
-    pub fn as_bytes(&self) -> ViuiResult<Vec<u8>> {
-        info!("Loading resource: '{}'", self.inner.path.display());
-        Ok(std::fs::read(self.inner.path.clone())?)
+    pub fn as_bytes(&self) -> ViuiResult<Box<[u8]>> {
+        //        info!("Loading resource: '{}'", self.inner.path.display());
+        Ok(std::fs::read(&self.inner.path)?.into_boxed_slice())
     }
 
     pub fn buf_reader(&self) -> ViuiResult<Box<dyn BufreadSeek>> {
         Ok(Box::new(BufReader::new(std::fs::File::open(
             &self.inner.path,
         )?)))
+    }
+}
+
+impl<T: Into<PathBuf>> From<T> for Resource {
+    fn from(value: T) -> Self {
+        Self::from_path(value)
     }
 }

@@ -107,6 +107,13 @@ impl From<image::ImageError> for ViuiError {
     }
 }
 
+impl From<ttf_parser::FaceParsingError> for ViuiError {
+    #[track_caller]
+    fn from(error: ttf_parser::FaceParsingError) -> Self {
+        Self::new(ViuiErrorKind::General(error.to_string()))
+    }
+}
+
 impl From<String> for ViuiErrorKind {
     #[track_caller]
     fn from(error: String) -> Self {

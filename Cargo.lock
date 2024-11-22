@@ -1365,9 +1365,9 @@ dependencies = [
 
 [[package]]
 name = "rustybuzz"
-version = "0.20.0"
+version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bb7452fae4166d0a686de84a66700658e950a768fa1aae0dcd035c90effd9d8"
+checksum = "fd3c7c96f8a08ee34eff8857b11b49b07d71d1c3f4e88f8a88d4c9e9f90b1702"
 dependencies = [
  "bitflags 2.6.0",
  "bytemuck",
@@ -1414,6 +1414,12 @@ dependencies = [
  "smithay-client-toolkit",
  "tiny-skia",
 ]
+
+[[package]]
+name = "self_cell"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d369a96f978623eb3dc28807c4852d6cc617fed53da5d3c400feff1ef34a714a"
 
 [[package]]
 name = "semver"
@@ -1837,6 +1843,8 @@ dependencies = [
  "rgb",
  "ron",
  "rstar",
+ "rustybuzz",
+ "self_cell",
  "serde",
  "serde_yml",
  "taffy",
@@ -1845,6 +1853,7 @@ dependencies = [
  "tracing",
  "tracing-log",
  "tracing-subscriber",
+ "ttf-parser",
  "unscanny",
  "winit",
 ]

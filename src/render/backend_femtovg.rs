@@ -72,7 +72,7 @@ impl FemtovgRenderBackend {
                 .expect("Cannot create renderer");
 
         let mut canvas = Canvas::new(renderer).expect("Cannot create canvas");
-        canvas.set_size(1200, 1200, window.scale_factor() as f32);
+        canvas.set_size(1200, 1200, 1.0);
         //        canvas.add_font("assets/fonts/Roboto-Regular.ttf").unwrap();
         let font_id = canvas
             .add_font("assets/fonts/OpenSans-Regular.ttf")
@@ -199,7 +199,6 @@ fn render(render_state: &mut RenderState, render_commands: &[RenderCommand]) {
         fonts,
     } = render_state;
     canvas.reset_transform();
-
     let mut fill_paint = Paint::color(Color::hsl(0.0, 0.0, 1.0))
         .with_text_baseline(Baseline::Middle)
         .with_font_size(20.0)
