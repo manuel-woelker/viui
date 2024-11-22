@@ -72,7 +72,7 @@ impl RenderContext<'_> {
         was_animated
     }
 
-    pub fn measure_text(&self, text: &String) -> ViuiResult<TextMeasurement> {
+    pub fn measure_text(&self, text: &str) -> ViuiResult<TextMeasurement> {
         self.font_pool.measure_text(0, text, self.font_size)
     }
 }

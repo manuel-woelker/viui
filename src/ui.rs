@@ -297,6 +297,11 @@ impl UI {
                     add_event_trigger(*node, InputEvent::character(character.character));
                 }
             }
+            UiEventKind::KeyInput(key_input) => {
+                for node in &self.active_nodes {
+                    add_event_trigger(*node, InputEvent::key_input(key_input.key.clone()));
+                }
+            }
         }
 
         for (node_idx, event) in events_to_trigger {

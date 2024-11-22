@@ -74,7 +74,7 @@ impl FontPool {
     pub fn measure_text(
         &self,
         font_index: usize,
-        text: &String,
+        text: &str,
         size: Float,
     ) -> ViuiResult<TextMeasurement> {
         let font = &self.fonts[font_index];

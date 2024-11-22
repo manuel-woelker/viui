@@ -1,6 +1,6 @@
 use crate::infrastructure::layout_context::LayoutContext;
 use crate::nodes::elements::kind::{Element, EventTrigger, LayoutConstraints};
-use crate::nodes::events::{InputEvent, InputEventKind};
+use crate::nodes::events::{InputEvent, InputEventKind, KeyboardKey};
 use crate::nodes::types::{NodeEvents, NodeProps, NodeState};
 use crate::render::command::RenderCommand;
 use crate::render::context::RenderContext;
@@ -21,19 +21,59 @@ impl Element for TextInputElement {
         props: &Self::Props,
         event_trigger: &mut EventTrigger<'_, Self::Events>,
     ) {
+        let mut edit_position = state.edit_position.unwrap_or_else(|| props.text.len());
+        edit_position = edit_position.clamp(0, props.text.len());
         match event.kind() {
             InputEventKind::MousePress { .. } => {
-                state.is_editing = true;
+                state.edit_position = Some(props.text.len());
             }
             InputEventKind::Character(character) => {
                 let mut new_value = props.text.clone();
-                if *character == '\u{8}' {
-                    new_value.pop();
-                } else {
-                    new_value.push(*character);
+                if !character.is_control() {
+                    new_value.insert(edit_position, *character);
+                    state.edit_position = Some(edit_position + character.len_utf8());
                 }
                 event_trigger(TextInputEvents::Change { new_value });
             }
+            InputEventKind::KeyInput(keyboard_key) => match keyboard_key {
+                KeyboardKey::ArrowLeft => {
+                    let mut s = props.text[0..edit_position].to_string();
+                    if s.len() > 0 {
+                        s.pop();
+                    }
+                    state.edit_position = Some(s.len());
+                }
+                KeyboardKey::ArrowRight => {
+                    if edit_position < props.text.len() {
+                        let s = &props.text[edit_position..];
+                        state.edit_position =
+                            Some(s.chars().next().unwrap().len_utf8() + edit_position);
+                    }
+                }
+                KeyboardKey::Home => {
+                    state.edit_position = Some(0);
+                }
+                KeyboardKey::End => {
+                    state.edit_position = Some(props.text.len());
+                }
+                KeyboardKey::Delete => {
+                    if edit_position < props.text.len() {
+                        let mut new_value = props.text.clone();
+                        new_value.remove(edit_position);
+                        event_trigger(TextInputEvents::Change { new_value });
+                    }
+                }
+                KeyboardKey::Backspace => {
+                    if edit_position > 0 {
+                        let s = &props.text[0..edit_position];
+                        let offset = s.chars().rev().next().unwrap().len_utf8();
+                        let mut new_value = props.text.clone();
+                        new_value.remove(edit_position - offset);
+                        event_trigger(TextInputEvents::Change { new_value });
+                    }
+                }
+                _ => {}
+            },
             _ => {}
         }
     }
@@ -56,14 +96,19 @@ impl Element for TextInputElement {
         });
 
         render_context.add_command(RenderCommand::SetFillColor(Color::new(0, 0, 0, 255)));
-        if state.is_editing && render_context.time() % 1.0 < 0.5 {
-            let size = render_context.measure_text(&props.text).unwrap();
-            render_context.add_command(RenderCommand::FillRect {
-                rect: Rect::new(
-                    Point::new(13.0 + size.width, stroke_width + 2.0),
-                    Size::new(2.0, 30.0),
-                ),
-            });
+        if let Some(mut edit_position) = state.edit_position {
+            edit_position = edit_position.clamp(0, props.text.len());
+            if render_context.time() % 1.0 < 0.5 {
+                let size = render_context
+                    .measure_text(&props.text[0..edit_position])
+                    .unwrap();
+                render_context.add_command(RenderCommand::FillRect {
+                    rect: Rect::new(
+                        Point::new(11.0 + size.width, stroke_width + 2.0),
+                        Size::new(2.0, 30.0),
+                    ),
+                });
+            }
         }
 
         render_context.add_command(RenderCommand::Translate { x: 10.0, y: 25.0 });
@@ -91,7 +136,7 @@ impl NodeProps for TextInputElementProps {}
 
 #[derive(Default, Reflect, Debug)]
 pub struct TextInputElementState {
-    pub is_editing: bool,
+    pub edit_position: Option<usize>,
 }
 
 impl NodeState for TextInputElementState {}

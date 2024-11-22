@@ -1,5 +1,5 @@
 use crate::infrastructure::font_pool::FontIndex;
-use crate::nodes::events::{MouseEventKind, UiEvent};
+use crate::nodes::events::{KeyboardKey, MouseEventKind, UiEvent};
 use crate::render::command::{ImageId, RenderCommand};
 use crate::types::Point;
 use crate::ui::RenderBackendMessage;
@@ -21,7 +21,7 @@ use std::num::NonZeroU32;
 use std::thread;
 use tracing::error;
 use winit::dpi::PhysicalSize;
-use winit::event::{ElementState, Event, MouseButton, WindowEvent};
+use winit::event::{ElementState, Event, MouseButton, VirtualKeyCode, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop, EventLoopBuilder};
 use winit::window::{Window, WindowBuilder};
 
@@ -112,6 +112,26 @@ impl FemtovgRenderBackend {
                         .event_sender
                         .send(UiEvent::character_input(character))
                         .unwrap(),
+                    WindowEvent::KeyboardInput { input, .. } => {
+                        if input.state == ElementState::Pressed {
+                            let key = match input.virtual_keycode {
+                                Some(VirtualKeyCode::Left) => Some(KeyboardKey::ArrowLeft),
+                                Some(VirtualKeyCode::Right) => Some(KeyboardKey::ArrowRight),
+                                Some(VirtualKeyCode::End) => Some(KeyboardKey::End),
+                                Some(VirtualKeyCode::Home) => Some(KeyboardKey::Home),
+                                Some(VirtualKeyCode::Return) => Some(KeyboardKey::Enter),
+                                Some(VirtualKeyCode::Escape) => Some(KeyboardKey::Escape),
+                                Some(VirtualKeyCode::Tab) => Some(KeyboardKey::Tab),
+                                Some(VirtualKeyCode::Delete) => Some(KeyboardKey::Delete),
+                                Some(VirtualKeyCode::Back) => Some(KeyboardKey::Backspace),
+                                _ => None,
+                            };
+                            if let Some(key) = key {
+                                self.event_sender.send(UiEvent::key_input(key)).unwrap();
+                            }
+                        }
+                    }
+
                     _ => {}
                 },
                 Event::RedrawRequested(_) => {
