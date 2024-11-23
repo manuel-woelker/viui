@@ -313,7 +313,7 @@ impl UI {
             }
             UiEventKind::KeyInput(key_input) => {
                 for node in &self.active_nodes {
-                    add_event_trigger(*node, InputEvent::key_input(key_input.key.clone()));
+                    add_event_trigger(*node, InputEvent::key_input(key_input.key));
                 }
             }
             UiEventKind::WindowResized {

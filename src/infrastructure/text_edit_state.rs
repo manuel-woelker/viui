@@ -27,7 +27,7 @@ impl<'a> TextEditState<'a> {
                 if !character.is_control() {
                     let mut new_text = self.text.to_string();
                     new_text.insert(self.cursor_position, *character);
-                    self.cursor_position = self.cursor_position + character.len_utf8();
+                    self.cursor_position += character.len_utf8();
                     self.new_text = Some(new_text);
                 }
             }
@@ -35,9 +35,7 @@ impl<'a> TextEditState<'a> {
                 KeyboardKey::ArrowLeft => {
                     if self.cursor_position > 0 {
                         let len = self.text[..self.cursor_position]
-                            .chars()
-                            .rev()
-                            .next()
+                            .chars().next_back()
                             .unwrap()
                             .len_utf8();
                         self.cursor_position -= len;
@@ -70,9 +68,7 @@ impl<'a> TextEditState<'a> {
                     if self.cursor_position > 0 {
                         let mut new_text = self.text.to_string();
                         let len = self.text[..self.cursor_position]
-                            .chars()
-                            .rev()
-                            .next()
+                            .chars().next_back()
                             .unwrap()
                             .len_utf8();
                         self.cursor_position -= len;

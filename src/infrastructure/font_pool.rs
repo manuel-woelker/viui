@@ -27,7 +27,7 @@ impl FontData {
         let resource = resource.into();
         let font_bytes = resource.as_bytes()?;
         let font_cell = FontCell::new(font_bytes, |font_bytes| FaceInfo {
-            face: Face::from_slice(&font_bytes, 0).unwrap(),
+            face: Face::from_slice(font_bytes, 0).unwrap(),
         });
 
         Ok(FontData {
@@ -58,6 +58,12 @@ use self_cell::self_cell;
 
 pub struct FontPool {
     fonts: Vec<FontData>,
+}
+
+impl Default for FontPool {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl FontPool {

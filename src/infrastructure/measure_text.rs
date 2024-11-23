@@ -29,7 +29,7 @@ impl<'a> TextMeasurer<'a> {
     pub fn measure_text(&self, string: &str, size: Float) -> ViuiResult<TextMeasurement> {
         let face = self.face;
         let mut buffer = UnicodeBuffer::new();
-        buffer.push_str(&string);
+        buffer.push_str(string);
         let glyphs = shape(face, &[], buffer);
         let mut width = 0i32;
         let upm = face.units_per_em() as Float;

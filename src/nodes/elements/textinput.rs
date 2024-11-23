@@ -23,7 +23,7 @@ impl Element for TextInputElement {
         props: &Self::Props,
         event_trigger: &mut EventTrigger<'_, Self::Events>,
     ) {
-        let mut edit_position = state.edit_position.unwrap_or_else(|| props.text.len());
+        let mut edit_position = state.edit_position.unwrap_or(props.text.len());
         edit_position = edit_position.clamp(0, props.text.len());
         let mut text_edit_state = TextEditState::new(&props.text, edit_position);
         text_edit_state.handle_event(event);
