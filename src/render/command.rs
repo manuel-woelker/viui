@@ -1,6 +1,6 @@
 use crate::infrastructure::font_pool::FontIndex;
 use crate::resource::Resource;
-use crate::types::{Color, Float, Point, Rect};
+use crate::types::{Color, Float, Point, Rect, Size};
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub struct ImageId(pub u64);
@@ -46,6 +46,9 @@ pub enum RenderCommand {
     },
     SetFont {
         font_idx: FontIndex,
+    },
+    SetWindowSize {
+        size: Size,
     },
     DrawImage {
         image_id: ImageId,

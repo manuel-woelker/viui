@@ -68,7 +68,7 @@ fn main_internal() -> ViuiResult<()> {
         },
     )?;
     ui.set_root_node_file("counter.viui-component")?;
-    let render_backend = FemtovgRenderBackend::new(ui.add_render_backend()?, ui.event_sender());
+    let render_backend = FemtovgRenderBackend::new(ui.add_render_backend()?);
     ui.start()?;
     info!("VIUI Sandbox started");
     render_backend.start();

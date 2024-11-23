@@ -1,9 +1,9 @@
 use crate::infrastructure::font_pool::FontIndex;
 use crate::nodes::events::{KeyboardKey, MouseEventKind, UiEvent};
+use crate::render::backend::RenderBackendParameters;
 use crate::render::command::{ImageId, RenderCommand};
-use crate::types::{Color, Point};
+use crate::types::{Color, Float, Point, Size};
 use crate::ui::RenderBackendMessage;
-use crossbeam_channel::{Receiver, Sender};
 use femtovg::renderer::OpenGl;
 use femtovg::{Baseline, Canvas, FontId, ImageFlags, Paint, Path, Solidity};
 use glutin::config::ConfigTemplateBuilder;
@@ -26,8 +26,7 @@ use winit::event_loop::{ControlFlow, EventLoop, EventLoopBuilder};
 use winit::window::{Window, WindowBuilder};
 
 pub struct FemtovgRenderBackend {
-    message_receiver: Receiver<RenderBackendMessage>,
-    event_sender: Sender<UiEvent>,
+    pub render_backend_parameters: RenderBackendParameters,
 }
 
 pub struct RenderState<'a> {
@@ -40,23 +39,24 @@ pub struct RenderState<'a> {
 }
 
 impl FemtovgRenderBackend {
-    pub fn new(
-        message_receiver: Receiver<RenderBackendMessage>,
-        event_sender: Sender<UiEvent>,
-    ) -> Self {
+    pub fn new(render_backend_parameters: RenderBackendParameters) -> Self {
         Self {
-            message_receiver,
-            event_sender,
+            render_backend_parameters,
         }
     }
     pub fn start(self) -> ! {
         let event_loop: EventLoop<RenderBackendMessage> =
             EventLoopBuilder::<RenderBackendMessage>::with_user_event().build();
         let event_loop_proxy = event_loop.create_proxy();
+        let RenderBackendParameters {
+            message_receiver,
+            initial_window_size,
+            ..
+        } = self.render_backend_parameters;
         thread::Builder::new()
             .name("Femtovg Forwarder".into())
             .spawn(move || loop {
-                if let Ok(message) = self.message_receiver.recv() {
+                if let Ok(message) = message_receiver.recv() {
                     if let Err(err) = event_loop_proxy.send_event(message) {
                         error!("Event loop closed: {}", err);
                     }
@@ -66,14 +66,14 @@ impl FemtovgRenderBackend {
                 }
             })
             .unwrap();
-        let (context, gl_display, window, surface) = create_window(&event_loop);
+        let (context, gl_display, window, surface) =
+            create_window(&event_loop, initial_window_size);
 
         let renderer =
             unsafe { OpenGl::new_from_function_cstr(|s| gl_display.get_proc_address(s).cast()) }
                 .expect("Cannot create renderer");
 
         let mut canvas = Canvas::new(renderer).expect("Cannot create canvas");
-        canvas.set_size(1200, 1200, 1.0);
         let mut render_list: Vec<RenderCommand> = Vec::new();
         let mut image_map = Default::default();
         let mut font_map = Default::default();
@@ -87,11 +87,13 @@ impl FemtovgRenderBackend {
                 font_map: &mut font_map,
             };
             *control_flow = ControlFlow::Wait;
+            let event_sender = &self.render_backend_parameters.event_sender;
             match event {
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::CursorMoved { position, .. } => {
                         let mouse_position = Point::new(position.x as f32, position.y as f32);
-                        self.event_sender
+
+                        event_sender
                             .send(UiEvent::mouse_move(mouse_position))
                             .unwrap()
                     }
@@ -99,8 +101,7 @@ impl FemtovgRenderBackend {
                         state,
                         button: MouseButton::Left,
                         ..
-                    } => self
-                        .event_sender
+                    } => event_sender
                         .send(UiEvent::mouse_input(if state == ElementState::Pressed {
                             MouseEventKind::Pressed
                         } else {
@@ -108,8 +109,7 @@ impl FemtovgRenderBackend {
                         }))
                         .unwrap(),
                     WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                    WindowEvent::ReceivedCharacter(character) => self
-                        .event_sender
+                    WindowEvent::ReceivedCharacter(character) => event_sender
                         .send(UiEvent::character_input(character))
                         .unwrap(),
                     WindowEvent::KeyboardInput { input, .. } => {
@@ -127,11 +127,18 @@ impl FemtovgRenderBackend {
                                 _ => None,
                             };
                             if let Some(key) = key {
-                                self.event_sender.send(UiEvent::key_input(key)).unwrap();
+                                event_sender.send(UiEvent::key_input(key)).unwrap();
                             }
                         }
                     }
-
+                    WindowEvent::Resized(size) => {
+                        event_sender
+                            .send(UiEvent::window_resized(
+                                Size::new(size.width as Float, size.height as Float),
+                                self.render_backend_parameters.backend_index,
+                            ))
+                            .unwrap();
+                    }
                     _ => {}
                 },
                 Event::RedrawRequested(_) => {
@@ -150,6 +157,7 @@ impl FemtovgRenderBackend {
 
 fn create_window(
     event_loop: &EventLoop<RenderBackendMessage>,
+    initial_window_size: Size,
 ) -> (
     PossiblyCurrentContext,
     Display,
@@ -157,7 +165,13 @@ fn create_window(
     Surface<WindowSurface>,
 ) {
     let window_builder = WindowBuilder::new()
-        .with_inner_size(PhysicalSize::new(1200., 1200.))
+        .with_inner_size(PhysicalSize::new(
+            initial_window_size.width,
+            initial_window_size.height,
+        ))
+        // Create window invisibly to workaround screen flicker because of a spurious resize message on creation
+        // cf. https://github.com/rust-windowing/winit/issues/2094
+        .with_visible(false)
         .with_title("viui");
 
     let template = ConfigTemplateBuilder::new().with_alpha_size(8);
@@ -169,6 +183,7 @@ fn create_window(
         .unwrap();
 
     let window = window.unwrap();
+    window.set_visible(true);
 
     let gl_display = gl_config.display();
 
@@ -216,6 +231,11 @@ fn render(render_state: &mut RenderState, render_commands: &[RenderCommand]) {
         font_map,
     } = render_state;
     canvas.reset_transform();
+    // Compensate for height difference to reduce flickering/jumping during window resize
+    let height_delta = _window.inner_size().height as i32 - canvas.height() as i32;
+    canvas.translate(0.0, -height_delta as Float);
+
+    //
     let mut fill_paint = Paint::color(femtovg::Color::hsl(0.0, 0.0, 1.0))
         .with_text_baseline(Baseline::Middle)
         .with_font_size(20.0)
@@ -327,6 +347,14 @@ fn render(render_state: &mut RenderState, render_commands: &[RenderCommand]) {
             RenderCommand::SetFont { font_idx } => {
                 let femto_id = font_map[font_idx];
                 stroke_paint.set_font(&[femto_id]);
+            }
+            RenderCommand::SetWindowSize { size } => {
+                surface.resize(
+                    context,
+                    NonZeroU32::try_from(size.width as u32).unwrap(),
+                    NonZeroU32::try_from(size.width as u32).unwrap(),
+                );
+                canvas.set_size(size.width as u32, size.height as u32, 1.0);
             }
         }
     }

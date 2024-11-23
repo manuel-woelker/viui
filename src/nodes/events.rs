@@ -1,4 +1,4 @@
-use crate::types::Point;
+use crate::types::{Point, Size};
 
 #[derive(Debug)]
 pub struct InputEvent {
@@ -73,6 +73,7 @@ pub enum UiEventKind {
     MouseInput(MouseInput),
     CharInput(CharInput),
     KeyInput(KeyInput),
+    WindowResized { size: Size, backend_index: usize },
 }
 
 #[derive(Debug)]
@@ -131,6 +132,14 @@ impl UiEvent {
     pub fn key_input(keyboard_key: KeyboardKey) -> Self {
         Self {
             kind: UiEventKind::KeyInput(KeyInput { key: keyboard_key }),
+        }
+    }
+    pub fn window_resized(size: Size, backend_index: usize) -> Self {
+        Self {
+            kind: UiEventKind::WindowResized {
+                size,
+                backend_index,
+            },
         }
     }
 }

@@ -6,7 +6,6 @@ pub mod model;
 pub mod nodes;
 pub mod observable_state;
 pub mod render;
-pub mod render_commands;
 pub mod resource;
 pub mod result;
 pub mod test_reflect;

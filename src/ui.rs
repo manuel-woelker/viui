@@ -8,7 +8,7 @@ use crate::infrastructure::font_pool::FontPool;
 use crate::infrastructure::image_pool::ImagePool;
 use crate::infrastructure::layout_context::LayoutContext;
 use crate::infrastructure::styling::Styling;
-use crate::nodes::data::{LayoutInfo, NodeData, PropExpression};
+use crate::nodes::data::{LayoutInfo, NodeData, NodeIdx, PropExpression};
 use crate::nodes::elements::button::ButtonElement;
 use crate::nodes::elements::hstack::HStackElement;
 use crate::nodes::elements::image::ImageElement;
@@ -21,6 +21,7 @@ use crate::nodes::events::{InputEvent, MouseEventKind, UiEvent, UiEventKind};
 use crate::nodes::registry::NodeRegistry;
 use crate::nodes::types::NodeEvents;
 use crate::observable_state::ObservableState;
+use crate::render::backend::RenderBackendParameters;
 use crate::render::command::RenderCommand;
 use crate::render::context::RenderContext;
 use crate::render::parameters::RenderParameters;
@@ -46,7 +47,7 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 use taffy::prelude::length;
-use taffy::{FlexDirection, NodeId, Style, TaffyTree};
+use taffy::{FlexDirection, Style, TaffyTree};
 use tracing::error;
 
 pub type ApplicationEventHandler = Box<dyn Fn(&mut ObservableState, &dyn Reflect) + Send>;
@@ -78,6 +79,7 @@ pub struct UI {
 struct RenderBackend {
     render_backend_sender: Sender<RenderBackendMessage>,
     maximum_font_index_loaded: usize,
+    window_size: Size,
 }
 
 pub struct RenderBackendMessage {
@@ -249,15 +251,22 @@ impl UI {
         self.ui_event_sender.clone()
     }
 
-    pub fn add_render_backend(&mut self) -> ViuiResult<Receiver<RenderBackendMessage>> {
+    pub fn add_render_backend(&mut self) -> ViuiResult<RenderBackendParameters> {
         let (render_backend_sender, message_receiver) =
             crossbeam_channel::bounded::<RenderBackendMessage>(4);
+        let backend_index = self.render_backends.len();
         self.render_backends.push(RenderBackend {
             render_backend_sender,
             maximum_font_index_loaded: 0,
+            window_size: Size::new(1200.0, 1200.0),
         });
         self.eval_layout_and_redraw()?;
-        Ok(message_receiver)
+        Ok(RenderBackendParameters {
+            message_receiver,
+            event_sender: self.event_sender(),
+            backend_index,
+            initial_window_size: Size::new(1200.0, 1200.0),
+        })
     }
 
     pub fn nodes(&mut self) -> impl Iterator<Item = &mut NodeData> {
@@ -306,6 +315,12 @@ impl UI {
                 for node in &self.active_nodes {
                     add_event_trigger(*node, InputEvent::key_input(key_input.key.clone()));
                 }
+            }
+            UiEventKind::WindowResized {
+                size,
+                backend_index,
+            } => {
+                self.render_backends[backend_index].window_size = size;
             }
         }
 
@@ -403,73 +418,78 @@ impl UI {
     }
 
     pub fn perform_layout(&mut self) -> ViuiResult<()> {
-        let mut tree: TaffyTree<()> = TaffyTree::new();
-        let mut layout_nodes = vec![];
-        let root_layout_node = tree.new_leaf(Style {
-            flex_direction: FlexDirection::Column,
-            size: taffy::Size {
-                width: length(1200.0),
-                height: length(1200.0),
-            },
-            ..Default::default()
-        })?;
-        self.node_arena[&self.root_node_idx].layout_id = root_layout_node;
-        let mut todo: Vec<_> = self.node_arena[&self.root_node_idx]
-            .children
-            .iter()
-            .map(|child_id| (root_layout_node, *child_id))
-            .rev()
-            .collect();
-        let mut layout_context = LayoutContext::new(&mut self.image_pool);
-        while let Some((parent_layout_id, node_id)) = todo.pop() {
-            layout_nodes.push(node_id);
-            let node = &mut self.node_arena[&node_id];
-            let layout_contraints = self.node_registry.layout_node(&mut layout_context, node)?;
-            let style = match layout_contraints {
-                LayoutConstraints::FixedLayout { width, height } => Some(Style {
+        let mut render_backends = take(&mut self.render_backends);
+        for backend in &mut render_backends {
+            let mut tree: TaffyTree<NodeIdx> = TaffyTree::new();
+            let root_layout_node = tree.new_leaf_with_context(
+                Style {
+                    flex_direction: FlexDirection::Column,
                     size: taffy::Size {
-                        width: length(width),
-                        height: length(height),
+                        width: length(backend.window_size.width),
+                        height: length(backend.window_size.height),
                     },
                     ..Default::default()
-                }),
-                LayoutConstraints::HorizontalLayout {} => Some(Style {
-                    flex_direction: FlexDirection::Row,
-                    size: taffy::Size {
-                        width: length(1000.0),
-                        height: length(50.0),
-                    },
-                    ..Default::default()
-                }),
-                LayoutConstraints::Passthrough => None,
-            };
-            let layout_id = if let Some(style) = style {
-                let child_id = tree.new_leaf(style)?;
-                tree.add_child(parent_layout_id, child_id)?;
-                child_id
-            } else {
-                parent_layout_id
-            };
-            for child in node.children.iter().rev() {
-                todo.push((layout_id, *child));
+                },
+                self.root_node_idx,
+            )?;
+            let mut todo: Vec<_> = self.node_arena[&self.root_node_idx]
+                .children
+                .iter()
+                .map(|child_id| (root_layout_node, *child_id))
+                .rev()
+                .collect();
+            let mut layout_context = LayoutContext::new(&mut self.image_pool);
+            while let Some((parent_layout_id, node_idx)) = todo.pop() {
+                let node = &mut self.node_arena[&node_idx];
+                let layout_contraints =
+                    self.node_registry.layout_node(&mut layout_context, node)?;
+                let style = match layout_contraints {
+                    LayoutConstraints::FixedLayout { width, height } => Some(Style {
+                        size: taffy::Size {
+                            width: length(width),
+                            height: length(height),
+                        },
+                        ..Default::default()
+                    }),
+                    LayoutConstraints::HorizontalLayout {} => Some(Style {
+                        flex_direction: FlexDirection::Row,
+                        size: taffy::Size::auto(),
+                        ..Default::default()
+                    }),
+                    LayoutConstraints::Passthrough => None,
+                };
+                let layout_id = if let Some(style) = style {
+                    let child_id = tree.new_leaf_with_context(style, node_idx)?;
+                    tree.add_child(parent_layout_id, child_id)?;
+                    child_id
+                } else {
+                    parent_layout_id
+                };
+                for child in node.children.iter().rev() {
+                    todo.push((layout_id, *child));
+                }
             }
-            self.node_arena[&node_id].layout_id = layout_id;
-        }
-        tree.compute_layout(root_layout_node, taffy::Size::max_content())?;
-        let mut todo = vec![(0.0, 0.0, self.root_node_idx)];
-        while let Some((parent_x, parent_y, node_id)) = todo.pop() {
-            let node = &mut self.node_arena[&node_id];
-            let layout = tree.layout(node.layout_id)?;
-            let x = parent_x + layout.location.x;
-            let y = parent_y + layout.location.y;
-            node.layout.bounds = Rect::new(
-                Point::new(x, y),
-                Size::new(layout.size.width, layout.size.height),
-            );
-            for child in &node.children {
-                todo.push((x, y, *child));
+            // Compute layout
+            tree.compute_layout(root_layout_node, taffy::Size::max_content())?;
+
+            // Set absolute position and bounds for each node
+            let mut todo = vec![(0.0, 0.0, root_layout_node)];
+            while let Some((parent_x, parent_y, node_id)) = todo.pop() {
+                let node_index = tree.get_node_context(node_id).unwrap();
+                let node = &mut self.node_arena[node_index];
+                let layout = tree.layout(node_id)?;
+                let x = parent_x + layout.location.x;
+                let y = parent_y + layout.location.y;
+                node.layout.bounds = Rect::new(
+                    Point::new(x, y),
+                    Size::new(layout.size.width, layout.size.height),
+                );
+                for child in tree.children(node_id)? {
+                    todo.push((x, y, child));
+                }
             }
         }
+        self.render_backends = render_backends;
         Ok(())
     }
 
@@ -504,8 +524,11 @@ impl UI {
         });
 
         render_context.add_command(RenderCommand::SetFillColor(self.styling.background_color));
+        render_context.add_command(RenderCommand::SetWindowSize {
+            size: backend.window_size,
+        });
         render_context.add_command(RenderCommand::FillRect {
-            rect: Rect::new(Point::new(0.0, 0.0), Size::new(1600.0, 1600.0)),
+            rect: Rect::new(Point::new(0.0, 0.0), backend.window_size),
         });
         let render_parameters = RenderParameters::new(&self.styling)?;
         let mut todo = vec![self.root_node_idx];
@@ -607,7 +630,6 @@ impl UI {
             prop_expressions: Vec::new(),
             event_mappings: Default::default(),
             children,
-            layout_id: NodeId::new(0),
         }))
     }
 
