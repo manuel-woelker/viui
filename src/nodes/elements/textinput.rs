@@ -54,7 +54,7 @@ impl Element for TextInputElement {
             radius: 2.0,
         });
 
-        render_context.add_command(RenderCommand::SetFillColor(styling.text_color));
+        render_context.add_command(RenderCommand::SetStrokeColor(styling.text_color));
         if let Some(mut edit_position) = state.edit_position {
             edit_position = edit_position.clamp(0, props.text.len());
             if render_context.time() % 1.0 < 0.5 {
