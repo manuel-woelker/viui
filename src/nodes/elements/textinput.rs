@@ -1,6 +1,7 @@
 use crate::infrastructure::layout_context::LayoutContext;
+use crate::infrastructure::text_edit_state::TextEditState;
 use crate::nodes::elements::kind::{Element, EventTrigger, LayoutConstraints};
-use crate::nodes::events::{InputEvent, InputEventKind, KeyboardKey};
+use crate::nodes::events::InputEvent;
 use crate::nodes::types::{NodeEvents, NodeProps, NodeState};
 use crate::render::command::RenderCommand;
 use crate::render::context::RenderContext;
@@ -24,58 +25,13 @@ impl Element for TextInputElement {
     ) {
         let mut edit_position = state.edit_position.unwrap_or_else(|| props.text.len());
         edit_position = edit_position.clamp(0, props.text.len());
-        match event.kind() {
-            InputEventKind::MousePress { .. } => {
-                state.edit_position = Some(props.text.len());
-            }
-            InputEventKind::Character(character) => {
-                let mut new_value = props.text.clone();
-                if !character.is_control() {
-                    new_value.insert(edit_position, *character);
-                    state.edit_position = Some(edit_position + character.len_utf8());
-                }
-                event_trigger(TextInputEvents::Change { new_value });
-            }
-            InputEventKind::KeyInput(keyboard_key) => match keyboard_key {
-                KeyboardKey::ArrowLeft => {
-                    let mut s = props.text[0..edit_position].to_string();
-                    if s.len() > 0 {
-                        s.pop();
-                    }
-                    state.edit_position = Some(s.len());
-                }
-                KeyboardKey::ArrowRight => {
-                    if edit_position < props.text.len() {
-                        let s = &props.text[edit_position..];
-                        state.edit_position =
-                            Some(s.chars().next().unwrap().len_utf8() + edit_position);
-                    }
-                }
-                KeyboardKey::Home => {
-                    state.edit_position = Some(0);
-                }
-                KeyboardKey::End => {
-                    state.edit_position = Some(props.text.len());
-                }
-                KeyboardKey::Delete => {
-                    if edit_position < props.text.len() {
-                        let mut new_value = props.text.clone();
-                        new_value.remove(edit_position);
-                        event_trigger(TextInputEvents::Change { new_value });
-                    }
-                }
-                KeyboardKey::Backspace => {
-                    if edit_position > 0 {
-                        let s = &props.text[0..edit_position];
-                        let offset = s.chars().rev().next().unwrap().len_utf8();
-                        let mut new_value = props.text.clone();
-                        new_value.remove(edit_position - offset);
-                        event_trigger(TextInputEvents::Change { new_value });
-                    }
-                }
-                _ => {}
-            },
-            _ => {}
+        let mut text_edit_state = TextEditState::new(&props.text, edit_position);
+        text_edit_state.handle_event(event);
+        state.edit_position = Some(text_edit_state.cursor_position);
+        if let Some(new_text) = text_edit_state.new_text {
+            event_trigger(TextInputEvents::Change {
+                new_value: new_text,
+            });
         }
     }
 

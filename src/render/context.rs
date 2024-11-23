@@ -1,4 +1,4 @@
-use crate::infrastructure::font_pool::FontPool;
+use crate::infrastructure::font_pool::{FontIndex, FontPool};
 use crate::infrastructure::image_pool::ImagePool;
 use crate::infrastructure::measure_text::TextMeasurement;
 use crate::render::command::{ImageId, RenderCommand};
@@ -73,6 +73,7 @@ impl RenderContext<'_> {
     }
 
     pub fn measure_text(&self, text: &str) -> ViuiResult<TextMeasurement> {
-        self.font_pool.measure_text(0, text, self.font_size)
+        self.font_pool
+            .measure_text(FontIndex::new(0), text, self.font_size)
     }
 }

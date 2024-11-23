@@ -73,11 +73,11 @@ impl FontPool {
 
     pub fn measure_text(
         &self,
-        font_index: usize,
+        font_index: FontIndex,
         text: &str,
         size: Float,
     ) -> ViuiResult<TextMeasurement> {
-        let font = &self.fonts[font_index];
+        let font = &self.fonts[font_index.index];
         TextMeasurer::new(font).measure_text(text, size)
     }
 

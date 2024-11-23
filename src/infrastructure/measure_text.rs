@@ -47,31 +47,27 @@ impl<'a> TextMeasurer<'a> {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::infrastructure::font_pool::FontPool;
 
     // function to create text measurer
     fn measure_text(string: &str, size: Float) -> ViuiResult<TextMeasurement> {
-        let font_data = FontCell::from_resource("assets/fonts/OpenSans-Regular.ttf")?;
-        TextMeasurer {
-            face: font_data.face(),
-        }
-        .measure_text(string, size)
+        let mut font_pool = FontPool::new();
+        let font_idx = font_pool.load_font("assets/fonts/OpenSans-Regular.ttf")?;
+        font_pool.measure_text(font_idx, string, size)
     }
 
     #[test]
     fn test_empty() {
-        let measurer = create_text_measurer();
         assert_eq!(
-            measurer.measure_text("", 1.0).unwrap(),
+            measure_text("", 1.0).unwrap(),
             TextMeasurement::new(0.0, 1.3618164)
         );
     }
 
     #[test]
     fn test_simple() {
-        let measurer = create_text_measurer();
-        // measure simple string
         assert_eq!(
-            measurer.measure_text("m", 16.0).unwrap(),
+            measure_text("m", 16.0).unwrap(),
             TextMeasurement::new(14.8125, 21.789063)
         );
     }
