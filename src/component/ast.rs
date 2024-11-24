@@ -72,7 +72,7 @@ pub struct PropDefinition {
 }
 
 #[derive(Debug, Clone)]
-pub enum Item {
+pub enum ItemDefinition {
     Node { node: NodeAst },
     If(IfItem),
 }
@@ -84,7 +84,7 @@ pub struct IfItem {
     pub else_items: Vec<ItemAst>,
 }
 
-pub type ItemAst = AstNode<Item>;
+pub type ItemAst = AstNode<ItemDefinition>;
 
 #[derive(Debug, Clone)]
 pub enum ExpressionKind {
@@ -177,8 +177,8 @@ fn node_ast_to_tree(node_definition: &NodeAst) -> Tree<String> {
 
 fn item_ast_to_tree(item_ast: &ItemAst) -> Tree<String> {
     match &item_ast.data {
-        Item::Node { node } => node_ast_to_tree(&node),
-        Item::If(if_item) => {
+        ItemDefinition::Node { node } => node_ast_to_tree(&node),
+        ItemDefinition::If(if_item) => {
             let mut if_tree = expression_ast_to_tree(&if_item.condition);
             if_tree.root.insert_str(0, "if ");
             let mut then_tree = Tree::new("then".to_string());

@@ -1,7 +1,7 @@
 use crate::bail;
 use crate::component::ast::{
-    ComponentAst, ComponentDefinition, ExpressionAst, ExpressionKind, IfItem, Item, ItemAst,
-    NodeAst, NodeDefinition, PropAst, PropDefinition, UIAst, UIDefinition,
+    ComponentAst, ComponentDefinition, ExpressionAst, ExpressionKind, IfItem, ItemAst,
+    ItemDefinition, NodeAst, NodeDefinition, PropAst, PropDefinition, UIAst, UIDefinition,
 };
 use crate::component::lexer::{lex, Token, TokenKind};
 use crate::component::span::Span;
@@ -71,10 +71,10 @@ impl<'a> Parser<'a> {
     fn parse_item(&mut self) -> ViuiResult<ItemAst> {
         let start = self.current_token().span.start;
         let item = match self.current_token().kind {
-            TokenKind::Identifier => Item::Node {
+            TokenKind::Identifier => ItemDefinition::Node {
                 node: self.parse_node()?,
             },
-            TokenKind::If => Item::If(self.parse_if()?),
+            TokenKind::If => ItemDefinition::If(self.parse_if()?),
             _ => {
                 bail!(
                     "Found {:?} {}, but expected node, if or for",

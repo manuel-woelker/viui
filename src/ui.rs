@@ -1,6 +1,6 @@
 use crate::arenal::{Arenal, Idx};
 use crate::bail;
-use crate::component::ast::{ComponentAst, ExpressionAst, Item, ItemAst};
+use crate::component::ast::{ComponentAst, ExpressionAst, ItemAst, ItemDefinition};
 use crate::component::eval::eval;
 use crate::component::parser::parse_ui;
 use crate::component::value::ExpressionValue;
@@ -279,6 +279,9 @@ impl UI {
         let mut add_event_trigger = |node_idx: Idx<NodeData>, node_event: InputEvent| {
             events_to_trigger.push((node_idx, node_event));
         };
+        // Clear out nodes that no longer exist
+        self.active_nodes
+            .retain(|node_idx| self.node_arena.contains(node_idx));
         match event.kind {
             UiEventKind::MouseMoved(position) => {
                 self.mouse_position = position;
@@ -635,7 +638,7 @@ impl UI {
 
     fn create_children(&mut self, child: &ItemAst) -> ViuiResult<Vec<Idx<NodeData>>> {
         match child.data() {
-            Item::Node { node } => {
+            ItemDefinition::Node { node } => {
                 let child = node.data();
                 let node_idx = self.create_node(&child.tag)?;
                 for prop in &child.props {
@@ -651,7 +654,7 @@ impl UI {
                 self.add_children(&node_idx, children);
                 Ok(vec![node_idx])
             }
-            Item::If(if_item) => {
+            ItemDefinition::If(if_item) => {
                 let condition = eval_expression(
                     self.app_state.state(),
                     &self.message_string_to_enum_converter,
@@ -661,7 +664,6 @@ impl UI {
                 let ExpressionValue::Bool(condition_value) = condition else {
                     bail!("Condition must be a boolean, instead got {:?}", condition);
                 };
-                dbg!(condition_value);
                 if condition_value {
                     let mut children = vec![];
                     for child in &if_item.then_items {

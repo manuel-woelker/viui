@@ -106,6 +106,17 @@ impl<T> Arenal<T> {
         index
     }
 
+    pub fn contains(&self, idx: &Idx<T>) -> bool {
+        if idx.arenal_id != self.arenal_id {
+            return false;
+        }
+        let entry = &self.entries[idx.offset as usize];
+        match entry {
+            Entry::Occupied(o) => idx.generation == o.generation,
+            _ => false,
+        }
+    }
+
     pub fn entries_mut(&mut self) -> impl Iterator<Item = &mut T> {
         self.entries.iter_mut().filter_map(|item| {
             if let Entry::Occupied(o) = item {
