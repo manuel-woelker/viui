@@ -1,7 +1,7 @@
 use crate::bail;
 use crate::component::ast::{
-    ComponentAst, ComponentDefinition, ExpressionAst, ExpressionKind, NodeAst, NodeDefinition,
-    PropAst, PropDefinition, UIAst, UIDefinition,
+    ComponentAst, ComponentDefinition, ExpressionAst, ExpressionKind, IfItem, Item, ItemAst,
+    NodeAst, NodeDefinition, PropAst, PropDefinition, UIAst, UIDefinition,
 };
 use crate::component::lexer::{lex, Token, TokenKind};
 use crate::component::span::Span;
@@ -56,7 +56,7 @@ impl<'a> Parser<'a> {
         self.consume(TokenKind::OpenBrace, "Expected '{'")?;
         let mut children = vec![];
         while !self.is_at(TokenKind::CloseBrace) {
-            children.push(self.parse_node()?);
+            children.push(self.parse_item()?);
         }
         self.consume(TokenKind::CloseBrace, "Expected '}'")?;
         Ok(ComponentAst::new(
@@ -66,6 +66,45 @@ impl<'a> Parser<'a> {
                 children,
             },
         ))
+    }
+
+    fn parse_item(&mut self) -> ViuiResult<ItemAst> {
+        let start = self.current_token().span.start;
+        let item = match self.current_token().kind {
+            TokenKind::Identifier => Item::Node {
+                node: self.parse_node()?,
+            },
+            TokenKind::If => Item::If(self.parse_if()?),
+            _ => {
+                bail!(
+                    "Found {:?} {}, but expected node, if or for",
+                    self.current_token().kind,
+                    self.current_token().lexeme,
+                )
+            }
+        };
+        Ok(ItemAst::new(
+            Span::new(start, self.previous_token().span.end),
+            item,
+        ))
+    }
+
+    fn parse_if(&mut self) -> ViuiResult<IfItem> {
+        self.consume(TokenKind::If, "Expected 'if'")?;
+        self.consume(TokenKind::OpenParen, "Expected '('")?;
+        let condition = self.parse_expression()?;
+        self.consume(TokenKind::CloseParen, "Expected ')'")?;
+        self.consume(TokenKind::OpenBrace, "Expected '{'")?;
+        let mut then_items = vec![];
+        while !self.is_at(TokenKind::CloseBrace) {
+            then_items.push(self.parse_item()?);
+        }
+        self.consume(TokenKind::CloseBrace, "Expected '}'")?;
+        Ok(IfItem {
+            condition,
+            then_items,
+            else_items: vec![],
+        })
     }
 
     fn parse_node(&mut self) -> ViuiResult<NodeAst> {
@@ -92,7 +131,7 @@ impl<'a> Parser<'a> {
         if self.is_at(TokenKind::OpenBrace) {
             self.advance_token();
             while !self.is_at(TokenKind::CloseBrace) {
-                children.push(self.parse_node()?);
+                children.push(self.parse_item()?);
             }
             self.consume(TokenKind::CloseBrace, "Expected '}'")?;
         }
@@ -402,6 +441,16 @@ mod tests {
                     └── Node button
                         └── child: Node label
             "#]];
+
+        parse_if, "component simple {if(true) {label}}",
+            expect![[r#"
+                UIDefinition
+                └── Component simple
+                    └── if VarUse true
+                        └── then
+                            └── Node label
+            "#]];
+
     );
 
     #[test]

@@ -1,4 +1,4 @@
-use crate::component::ast::NodeAst;
+use crate::component::ast::ItemAst;
 use crate::err;
 use crate::infrastructure::layout_context::LayoutContext;
 use crate::nodes::data::NodeData;
@@ -45,7 +45,7 @@ impl NodeRegistry {
         layout_fn: impl Fn(&mut LayoutContext, &mut NodeData) -> ViuiResult<LayoutConstraints>
             + Send
             + 'static,
-        children: Vec<NodeAst>,
+        children: Vec<ItemAst>,
     ) {
         self.register_internal(
             name.into(),
@@ -67,7 +67,7 @@ impl NodeRegistry {
         event_handler: NodeEventHandler<Box<dyn NodeEvents>>,
         render_fn: NodeRenderFn,
         layout_fn: LayoutFn,
-        children: Vec<NodeAst>,
+        children: Vec<ItemAst>,
     ) {
         let kind_index = self.nodes.len();
         self.nodes.push(NodeDescriptor {

@@ -17,6 +17,7 @@ pub type ArcFunction = Arc<dyn Function>;
 
 #[derive(Debug, Clone)]
 pub enum ExpressionValue {
+    Bool(bool),
     Float(Float),
     String(String),
     Reflect(Arc<dyn Reflect>),
@@ -93,6 +94,7 @@ impl ExpressionValue {
             ExpressionValue::Float(value) => value,
             ExpressionValue::String(value) => value,
             ExpressionValue::Reflect(reflect) => &**reflect,
+            ExpressionValue::Bool(value) => value,
             ExpressionValue::Function(_) => todo!("Function as reflect"),
         }
     }
@@ -100,6 +102,7 @@ impl ExpressionValue {
         match self {
             ExpressionValue::Float(value) => Box::new(*value),
             ExpressionValue::String(value) => Box::new(value.clone()),
+            ExpressionValue::Bool(value) => Box::new(*value),
             ExpressionValue::Reflect(_reflect) => todo!("Reflect clone"),
             ExpressionValue::Function(_) => todo!("Function as reflect"),
         }
@@ -109,6 +112,7 @@ impl ExpressionValue {
 impl Display for ExpressionValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            ExpressionValue::Bool(value) => write!(f, "{}", value),
             ExpressionValue::Float(value) => write!(f, "{}", value),
             ExpressionValue::String(value) => write!(f, "{}", value),
             ExpressionValue::Reflect(reflect) => write!(f, "{:?}", reflect.as_ref()),

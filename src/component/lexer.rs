@@ -19,6 +19,8 @@ pub enum TokenKind {
     CloseParen,
     Equal,
     At,
+    If,
+    Else,
     Component,
     Comma,
 }
@@ -51,6 +53,8 @@ pub struct Lexer<'a> {
 
 static KEYWORDS: phf::Map<&'static str, TokenKind> = phf_map! {
     "component" => TokenKind::Component,
+    "if" => TokenKind::If,
+    "else" => TokenKind::Else,
 };
 
 impl<'a> Lexer<'a> {
@@ -130,21 +134,28 @@ impl<'a> Lexer<'a> {
                 self.push_state(LexerState::TemplateLiteral);
             }
             '/' => {
-                if self.scanner.eat_if('*') {
-                    let mut depth = 1;
-                    // ignore nested comments
-                    while depth > 0 && !self.scanner.done() {
-                        let Some(char) = self.scanner.eat() else {
-                            break;
-                        };
-                        if char == '/' && self.scanner.eat_if('*') {
-                            depth += 1;
-                        } else if char == '*' && self.scanner.eat_if('/') {
-                            depth -= 1;
+                let next_char = self.scanner.peek();
+                match next_char {
+                    Some('/') => {
+                        self.scanner.eat_until('\n');
+                    }
+                    Some('*') => {
+                        let mut depth = 1;
+                        // ignore nested comments
+                        while depth > 0 && !self.scanner.done() {
+                            let Some(char) = self.scanner.eat() else {
+                                break;
+                            };
+                            if char == '/' && self.scanner.eat_if('*') {
+                                depth += 1;
+                            } else if char == '*' && self.scanner.eat_if('/') {
+                                depth -= 1;
+                            }
                         }
                     }
-                } else {
-                    self.create_token(start, TokenKind::Unexpected);
+                    _ => {
+                        self.create_token(start, TokenKind::Unexpected);
+                    }
                 }
             }
             _ => {
@@ -380,6 +391,23 @@ mod tests {
         test_nested_comment2, "/* /*foo )*/( /* */*/@", expect![[r#"
             <At> '@' 21+1
             <EOF> '' 22+0
+        "#]];
+
+        test_line_comment, "// foo", expect![[r#"
+            <EOF> '' 6+0
+        "#]];
+        test_line_comment2, "// foo\n3", expect![[r#"
+            <Number> '3' 7+1
+            <EOF> '' 8+0
+        "#]];
+
+        test_if, "if", expect![[r#"
+            <If> 'if' 0+2
+            <EOF> '' 2+0
+        "#]];
+        test_else, "else", expect![[r#"
+            <Else> 'else' 0+4
+            <EOF> '' 4+0
         "#]];
     );
 }

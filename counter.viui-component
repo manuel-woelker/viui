@@ -6,7 +6,12 @@ component CounterComponent {
 		label(label=`A`)
 		label(label=`B`)
 	}
-	image(src="assets/images/cat_playing.jpg")
+	// Image
+	button(label="Toggle Image" @click=ToggleImage)
+	label(label=`Show Image: ${show_image}`)
+	if(show_image) {
+		image(src="assets/images/cat_playing.jpg")
+	}
 	button(label="Increment" @click=Increment)
 	button(label="Decrement" @click=Decrement)
 	label(label=`Gain: ${gain}`)

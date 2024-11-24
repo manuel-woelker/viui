@@ -33,7 +33,7 @@ impl Element for LabelElement {
         _props: &Self::Props,
     ) -> ViuiResult<LayoutConstraints> {
         Ok(LayoutConstraints::FixedLayout {
-            width: 200.0,
+            width: 400.0,
             height: 40.0,
         })
     }

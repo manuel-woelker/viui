@@ -13,6 +13,7 @@ struct AppState {
     counter: i32,
     gain: Float,
     name: String,
+    show_image: bool,
 }
 
 #[derive(Debug, Reflect, Serialize, Deserialize)]
@@ -21,6 +22,7 @@ enum AppMessage {
     Decrement,
     Set(Float),
     SetName(String),
+    ToggleImage,
 }
 
 fn main() {
@@ -37,10 +39,12 @@ fn main_internal() -> ViuiResult<()> {
         counter: 3,
         gain: 3.0,
         name: "Bob".to_string(),
+        show_image: true,
     });
     let counter_path = TypedPath::<i32>::new(ParsedPath::parse("counter")?);
     let gain_path = TypedPath::<Float>::new(ParsedPath::parse("gain")?);
     let name_path = TypedPath::<String>::new(ParsedPath::parse("name")?);
+    let show_image_path = TypedPath::<bool>::new(ParsedPath::parse("show_image")?);
     let mut ui = UI::new(
         app_state,
         "CounterComponent".to_string(),
@@ -63,6 +67,11 @@ fn main_internal() -> ViuiResult<()> {
             AppMessage::SetName(new_name) => {
                 app_state.apply_change("Set name", |mutator| {
                     mutator.mutate(&name_path, |name| *name = new_name.to_string());
+                });
+            }
+            AppMessage::ToggleImage => {
+                app_state.apply_change("Toggle image", |mutator| {
+                    mutator.mutate(&show_image_path, |show_image| *show_image = !*show_image);
                 });
             }
         },

@@ -49,7 +49,7 @@ pub type ComponentAst = AstNode<ComponentDefinition>;
 #[derive(Debug)]
 pub struct ComponentDefinition {
     pub name: String,
-    pub children: Vec<NodeAst>,
+    pub children: Vec<ItemAst>,
 }
 
 pub type NodeAst = AstNode<NodeDefinition>;
@@ -58,7 +58,7 @@ pub type NodeAst = AstNode<NodeDefinition>;
 pub struct NodeDefinition {
     pub tag: String,
     pub props: Vec<PropAst>,
-    pub children: Vec<NodeAst>,
+    pub children: Vec<ItemAst>,
     pub events: Vec<PropAst>,
 }
 
@@ -70,6 +70,21 @@ pub struct PropDefinition {
     pub expression: ExpressionAst,
     //pub children: Vec<UIAst>,
 }
+
+#[derive(Debug, Clone)]
+pub enum Item {
+    Node { node: NodeAst },
+    If(IfItem),
+}
+
+#[derive(Debug, Clone)]
+pub struct IfItem {
+    pub condition: ExpressionAst,
+    pub then_items: Vec<ItemAst>,
+    pub else_items: Vec<ItemAst>,
+}
+
+pub type ItemAst = AstNode<Item>;
 
 #[derive(Debug, Clone)]
 pub enum ExpressionKind {
@@ -134,7 +149,7 @@ fn ui_ast_to_tree(ast: &UIAst) -> Tree<String> {
 fn component_ast_to_tree(component: &ComponentAst) -> Tree<String> {
     let mut tree = Tree::new(format!("Component {}", component.data.name));
     for child in &component.children {
-        tree.push(node_ast_to_tree(child));
+        tree.push(item_ast_to_tree(child));
     }
     tree
 }
@@ -153,11 +168,34 @@ fn node_ast_to_tree(node_definition: &NodeAst) -> Tree<String> {
         tree.push(event_tree);
     }
     for child in &node_definition.children {
-        let mut event_tree = node_ast_to_tree(child);
+        let mut event_tree = item_ast_to_tree(child);
         event_tree.root.insert_str(0, "child: ");
         tree.push(event_tree);
     }
     tree
+}
+
+fn item_ast_to_tree(item_ast: &ItemAst) -> Tree<String> {
+    match &item_ast.data {
+        Item::Node { node } => node_ast_to_tree(&node),
+        Item::If(if_item) => {
+            let mut if_tree = expression_ast_to_tree(&if_item.condition);
+            if_tree.root.insert_str(0, "if ");
+            let mut then_tree = Tree::new("then".to_string());
+            for child in &if_item.then_items {
+                then_tree.push(item_ast_to_tree(child));
+            }
+            if_tree.push(then_tree);
+            if !if_item.else_items.is_empty() {
+                let mut else_tree = Tree::new("else".to_string());
+                for child in &if_item.else_items {
+                    else_tree.push(item_ast_to_tree(child));
+                }
+                if_tree.push(else_tree);
+            }
+            if_tree
+        }
+    }
 }
 
 fn prop_ast_to_tree(prop_definition: &PropAst) -> Tree<String> {

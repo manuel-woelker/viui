@@ -1,6 +1,6 @@
 use crate::arenal::{Arenal, Idx};
 use crate::bail;
-use crate::component::ast::{ComponentAst, ExpressionAst, NodeAst};
+use crate::component::ast::{ComponentAst, ExpressionAst, Item, ItemAst};
 use crate::component::eval::eval;
 use crate::component::parser::parse_ui;
 use crate::component::value::ExpressionValue;
@@ -228,6 +228,7 @@ impl UI {
     }
 
     pub fn eval_layout_and_redraw(&mut self) -> ViuiResult<()> {
+        self.set_root_node()?; // TODO: remove
         self.eval_expressions()?;
         self.perform_layout()?;
         self.redraw()?;
@@ -617,8 +618,7 @@ impl UI {
         let kind_index = component.kind_index;
         let mut children = vec![];
         for child in &component.children.clone() {
-            let node_idx = self.create_child(child)?;
-            children.push(node_idx);
+            children.extend(self.create_children(child)?);
         }
         let component = self.node_registry.get_node_by_name(name)?;
         Ok(self.node_arena.insert(NodeData {
@@ -633,20 +633,45 @@ impl UI {
         }))
     }
 
-    fn create_child(&mut self, child: &NodeAst) -> ViuiResult<Idx<NodeData>> {
-        let node_idx = self.create_node(&child.tag)?;
-        for prop in &child.props {
-            self.set_node_prop(&node_idx, &prop.name, prop.expression.clone());
+    fn create_children(&mut self, child: &ItemAst) -> ViuiResult<Vec<Idx<NodeData>>> {
+        match child.data() {
+            Item::Node { node } => {
+                let child = node.data();
+                let node_idx = self.create_node(&child.tag)?;
+                for prop in &child.props {
+                    self.set_node_prop(&node_idx, &prop.name, prop.expression.clone());
+                }
+                for event in &child.events {
+                    self.set_event_mapping(&node_idx, &event.name, event.expression.clone());
+                }
+                let mut children = vec![];
+                for child in &child.children {
+                    children.extend(self.create_children(child)?);
+                }
+                self.add_children(&node_idx, children);
+                Ok(vec![node_idx])
+            }
+            Item::If(if_item) => {
+                let condition = eval_expression(
+                    self.app_state.state(),
+                    &self.message_string_to_enum_converter,
+                    &if_item.condition,
+                    &|_name| Ok(None),
+                )?;
+                let ExpressionValue::Bool(condition_value) = condition else {
+                    bail!("Condition must be a boolean, instead got {:?}", condition);
+                };
+                dbg!(condition_value);
+                if condition_value {
+                    let mut children = vec![];
+                    for child in &if_item.then_items {
+                        children.extend(self.create_children(child)?);
+                    }
+                    return Ok(children);
+                }
+                Ok(vec![])
+            }
         }
-        for event in &child.events {
-            self.set_event_mapping(&node_idx, &event.name, event.expression.clone());
-        }
-        let mut children = vec![];
-        for child in &child.children {
-            children.push(self.create_child(child)?)
-        }
-        self.add_children(&node_idx, children);
-        Ok(node_idx)
     }
 
     fn register_component_node(&mut self, component_ast: &ComponentAst) {
@@ -688,6 +713,8 @@ fn eval_expression(
                 Ok(ExpressionValue::Float(*value as f32))
             } else if let Some(value) = value.downcast_ref::<String>() {
                 Ok(ExpressionValue::String(value.clone()))
+            } else if let Some(value) = value.downcast_ref::<bool>() {
+                Ok(ExpressionValue::Bool(*value))
             } else {
                 bail!(
                     "Unsupported property type for {}: {}",
