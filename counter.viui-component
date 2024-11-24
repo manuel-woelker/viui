@@ -10,7 +10,9 @@ component CounterComponent {
 	button(label="Toggle Image" @click=ToggleImage)
 	label(label=`Show Image: ${show_image}`)
 	if(show_image) {
+
 		image(src="assets/images/cat_playing.jpg")
+		label(label=`A cat`)
 	}
 	button(label="Increment" @click=Increment)
 	button(label="Decrement" @click=Decrement)

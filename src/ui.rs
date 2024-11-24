@@ -1,4 +1,4 @@
-use crate::arenal::{Arenal, Idx};
+use crate::arenal::Arenal;
 use crate::bail;
 use crate::component::ast::{ComponentAst, ExpressionAst, ItemAst, ItemDefinition};
 use crate::component::eval::eval;
@@ -18,6 +18,7 @@ use crate::nodes::elements::label::LabelElement;
 use crate::nodes::elements::spinner::SpinnerElement;
 use crate::nodes::elements::textinput::TextInputElement;
 use crate::nodes::events::{InputEvent, MouseEventKind, UiEvent, UiEventKind};
+use crate::nodes::item::{BlockItem, IfItem, ItemIdx, NodeItem, NodeItemKind};
 use crate::nodes::registry::NodeRegistry;
 use crate::nodes::types::NodeEvents;
 use crate::observable_state::ObservableState;
@@ -57,7 +58,9 @@ pub struct UI {
     root_component_name: String,
     node_registry: NodeRegistry,
     node_arena: Arenal<NodeData>,
-    root_node_idx: Idx<NodeData>,
+    item_arena: Arenal<NodeItem>,
+    root_item_idx: ItemIdx,
+    root_node_idx: NodeIdx,
     app_state: Box<ObservableState>,
     event_handler: ApplicationEventHandler,
     message_string_to_enum_converter: MessageStringToEnumConverter,
@@ -68,8 +71,8 @@ pub struct UI {
     file_change_receiver: Receiver<()>,
     file_watcher: Debouncer<RecommendedWatcher>,
     root_node_file: PathBuf,
-    active_nodes: Vec<Idx<NodeData>>,
-    animated_nodes: Vec<Idx<NodeData>>,
+    active_nodes: Vec<NodeIdx>,
+    animated_nodes: Vec<NodeIdx>,
     image_pool: ImagePool,
     font_pool: FontPool,
     start: Instant,
@@ -124,6 +127,7 @@ impl UI {
             root_component_name,
             node_registry,
             node_arena: Arenal::new(),
+            item_arena: Arenal::new(),
             app_state: Box::new(state),
             event_handler: Box::new(move |state, message| {
                 let typed_message = message.downcast_ref::<MESSAGE>().unwrap();
@@ -138,6 +142,7 @@ impl UI {
             file_watcher,
             root_node_file: Default::default(),
             active_nodes: Default::default(),
+            root_item_idx: Default::default(),
             root_node_idx: Default::default(),
             image_pool: Default::default(),
             font_pool,
@@ -276,7 +281,7 @@ impl UI {
 
     pub fn handle_ui_event(&mut self, event: UiEvent) -> ViuiResult<()> {
         let mut events_to_trigger = Vec::new();
-        let mut add_event_trigger = |node_idx: Idx<NodeData>, node_event: InputEvent| {
+        let mut add_event_trigger = |node_idx: NodeIdx, node_event: InputEvent| {
             events_to_trigger.push((node_idx, node_event));
         };
         // Clear out nodes that no longer exist
@@ -372,49 +377,75 @@ impl UI {
     }
 
     pub fn eval_expressions(&mut self) -> ViuiResult<()> {
-        for node in self.node_arena.entries_mut() {
-            for expression in &node.prop_expressions {
-                let prop = node.props.reflect_path_mut(&*expression.field_name)?;
-                let app_state = self.app_state.state();
-                let value = eval_expression(
-                    app_state,
-                    &self.message_string_to_enum_converter,
-                    &expression.expression,
-                    &|_name| Ok(None),
-                )?;
-                if let Some(prop) = prop.downcast_mut::<f32>() {
-                    let ExpressionValue::Float(value) = value else {
-                        bail!(
-                            "Expected float for property {}, but was: {}",
-                            expression.field_name,
-                            value
-                        );
+        let mut todo = vec![self.root_item_idx];
+        while let Some(item_idx) = todo.pop() {
+            let item = &mut self.item_arena[&item_idx];
+            match &mut item.kind {
+                NodeItemKind::Node(node_idx) => {
+                    let node = &mut self.node_arena[node_idx];
+                    todo.extend(node.children.iter());
+                    for expression in &node.prop_expressions {
+                        let prop = node.props.reflect_path_mut(&*expression.field_name)?;
+                        let app_state = self.app_state.state();
+                        let value = eval_expression(
+                            app_state,
+                            &self.message_string_to_enum_converter,
+                            &expression.expression,
+                            &|_name| Ok(None),
+                        )?;
+                        if let Some(prop) = prop.downcast_mut::<f32>() {
+                            let ExpressionValue::Float(value) = value else {
+                                bail!(
+                                    "Expected float for property {}, but was: {}",
+                                    expression.field_name,
+                                    value
+                                );
+                            };
+                            *prop = value;
+                        } else if let Some(prop) = prop.downcast_mut::<i32>() {
+                            let ExpressionValue::Float(value) = value else {
+                                bail!(
+                                    "Expected number for property {}, but was: {}",
+                                    expression.field_name,
+                                    value
+                                );
+                            };
+                            *prop = value as i32;
+                        } else if let Some(prop) = prop.downcast_mut::<String>() {
+                            let ExpressionValue::String(value) = value else {
+                                bail!(
+                                    "Expected string for property {}, but was: {}",
+                                    expression.field_name,
+                                    value
+                                );
+                            };
+                            *prop = value;
+                        } else {
+                            error!(
+                                "Unsupported property type for {}: {}",
+                                expression.field_name,
+                                prop.reflect_short_type_path()
+                            );
+                        }
+                    }
+                }
+                NodeItemKind::If(ref mut if_item) => {
+                    let value = eval_expression(
+                        self.app_state.state(),
+                        &self.message_string_to_enum_converter,
+                        &if_item.condition_expression,
+                        &|_name| Ok(None),
+                    )?;
+                    let ExpressionValue::Bool(condition_value) = value else {
+                        bail!("Condition must be a boolean, instead got {:?}", value);
                     };
-                    *prop = value;
-                } else if let Some(prop) = prop.downcast_mut::<i32>() {
-                    let ExpressionValue::Float(value) = value else {
-                        bail!(
-                            "Expected number for property {}, but was: {}",
-                            expression.field_name,
-                            value
-                        );
-                    };
-                    *prop = value as i32;
-                } else if let Some(prop) = prop.downcast_mut::<String>() {
-                    let ExpressionValue::String(value) = value else {
-                        bail!(
-                            "Expected string for property {}, but was: {}",
-                            expression.field_name,
-                            value
-                        );
-                    };
-                    *prop = value;
-                } else {
-                    error!(
-                        "Unsupported property type for {}: {}",
-                        expression.field_name,
-                        prop.reflect_short_type_path()
-                    );
+                    if_item.condition = condition_value;
+                    if condition_value {
+                        todo.push(if_item.then_item);
+                    }
+                }
+                NodeItemKind::Block(block_item) => {
+                    todo.extend(block_item.items.iter());
                 }
             }
         }
@@ -436,41 +467,57 @@ impl UI {
                 },
                 self.root_node_idx,
             )?;
-            let mut todo: Vec<_> = self.node_arena[&self.root_node_idx]
+            let root_node = &self.node_arena[&self.root_node_idx];
+            let mut todo: Vec<_> = root_node
                 .children
                 .iter()
                 .map(|child_id| (root_layout_node, *child_id))
                 .rev()
                 .collect();
             let mut layout_context = LayoutContext::new(&mut self.image_pool);
-            while let Some((parent_layout_id, node_idx)) = todo.pop() {
-                let node = &mut self.node_arena[&node_idx];
-                let layout_contraints =
-                    self.node_registry.layout_node(&mut layout_context, node)?;
-                let style = match layout_contraints {
-                    LayoutConstraints::FixedLayout { width, height } => Some(Style {
-                        size: taffy::Size {
-                            width: length(width),
-                            height: length(height),
-                        },
-                        ..Default::default()
-                    }),
-                    LayoutConstraints::HorizontalLayout {} => Some(Style {
-                        flex_direction: FlexDirection::Row,
-                        size: taffy::Size::auto(),
-                        ..Default::default()
-                    }),
-                    LayoutConstraints::Passthrough => None,
-                };
-                let layout_id = if let Some(style) = style {
-                    let child_id = tree.new_leaf_with_context(style, node_idx)?;
-                    tree.add_child(parent_layout_id, child_id)?;
-                    child_id
-                } else {
-                    parent_layout_id
-                };
-                for child in node.children.iter().rev() {
-                    todo.push((layout_id, *child));
+            while let Some((parent_layout_id, item_idx)) = todo.pop() {
+                let item = &self.item_arena[&item_idx];
+                match &item.kind {
+                    NodeItemKind::Node(node_idx) => {
+                        let node = &mut self.node_arena[&node_idx];
+                        let layout_contraints =
+                            self.node_registry.layout_node(&mut layout_context, node)?;
+                        let style = match layout_contraints {
+                            LayoutConstraints::FixedLayout { width, height } => Some(Style {
+                                size: taffy::Size {
+                                    width: length(width),
+                                    height: length(height),
+                                },
+                                ..Default::default()
+                            }),
+                            LayoutConstraints::HorizontalLayout {} => Some(Style {
+                                flex_direction: FlexDirection::Row,
+                                size: taffy::Size::auto(),
+                                ..Default::default()
+                            }),
+                            LayoutConstraints::Passthrough => None,
+                        };
+                        let layout_id = if let Some(style) = style {
+                            let child_id = tree.new_leaf_with_context(style, *node_idx)?;
+                            tree.add_child(parent_layout_id, child_id)?;
+                            child_id
+                        } else {
+                            parent_layout_id
+                        };
+                        for child in node.children.iter().rev() {
+                            todo.push((layout_id, *child));
+                        }
+                    }
+                    NodeItemKind::If(if_item) => {
+                        if if_item.condition {
+                            todo.push((parent_layout_id, if_item.then_item))
+                        }
+                    }
+                    NodeItemKind::Block(block_item) => {
+                        for child in block_item.items.iter().rev() {
+                            todo.push((parent_layout_id, *child));
+                        }
+                    }
                 }
             }
             // Compute layout
@@ -535,33 +582,47 @@ impl UI {
             rect: Rect::new(Point::new(0.0, 0.0), backend.window_size),
         });
         let render_parameters = RenderParameters::new(&self.styling)?;
-        let mut todo = vec![self.root_node_idx];
-        while let Some(node_idx) = todo.pop() {
-            let node = &self.node_arena[&node_idx];
-            render_context.add_command(RenderCommand::Save);
-            render_context.add_command(RenderCommand::Translate {
-                x: node.layout.bounds.origin.x,
-                y: node.layout.bounds.origin.y,
-            });
-            render_context.add_command(RenderCommand::ClipRect(Rect::new(
-                Point::new(0.0, 0.0),
-                node.layout.bounds.size,
-            )));
+        let mut todo = vec![self.root_item_idx];
+        while let Some(item_idx) = todo.pop() {
+            let item = &self.item_arena[&item_idx];
+            match &item.kind {
+                NodeItemKind::Node(node_idx) => {
+                    let node = &self.node_arena[&node_idx];
+                    render_context.add_command(RenderCommand::Save);
+                    render_context.add_command(RenderCommand::Translate {
+                        x: node.layout.bounds.origin.x,
+                        y: node.layout.bounds.origin.y,
+                    });
+                    render_context.add_command(RenderCommand::ClipRect(Rect::new(
+                        Point::new(0.0, 0.0),
+                        node.layout.bounds.size,
+                    )));
 
-            self.node_registry
-                .render_node(&mut render_context, &render_parameters, node)?;
-            if render_context.reset_animated() {
-                animated_nodes.push(node_idx);
+                    self.node_registry.render_node(
+                        &mut render_context,
+                        &render_parameters,
+                        node,
+                    )?;
+                    if render_context.reset_animated() {
+                        animated_nodes.push(*node_idx);
+                    }
+                    render_context.add_command(RenderCommand::Restore);
+                    todo.extend(node.children.iter());
+                }
+                NodeItemKind::If(if_item) => {
+                    if if_item.condition {
+                        todo.push(if_item.then_item);
+                    }
+                }
+                NodeItemKind::Block(block_item) => todo.extend(block_item.items.iter()),
             }
-            render_context.add_command(RenderCommand::Restore);
-            todo.extend(node.children.iter());
         }
         Ok(render_context.render_queue())
     }
 
     pub fn set_node_prop(
         &mut self,
-        node_index: &Idx<NodeData>,
+        node_index: &NodeIdx,
         field_name: &str,
         expression: ExpressionAst,
     ) {
@@ -573,12 +634,7 @@ impl UI {
             });
     }
 
-    pub fn set_event_mapping(
-        &mut self,
-        node_index: &Idx<NodeData>,
-        event: &str,
-        message: ExpressionAst,
-    ) {
+    pub fn set_event_mapping(&mut self, node_index: &NodeIdx, event: &str, message: ExpressionAst) {
         self.node_arena
             .index_mut(node_index)
             .event_mappings
@@ -612,16 +668,20 @@ impl UI {
 
     pub fn set_root_node(&mut self) -> ViuiResult<()> {
         self.node_arena.clear();
+        self.item_arena.clear();
         self.root_node_idx = self.create_node(&self.root_component_name.to_string())?;
+        self.root_item_idx = self.item_arena.insert(NodeItem {
+            kind: NodeItemKind::Node(self.root_node_idx),
+        });
         Ok(())
     }
 
-    pub fn create_node(&mut self, name: &str) -> ViuiResult<Idx<NodeData>> {
+    pub fn create_node(&mut self, name: &str) -> ViuiResult<NodeIdx> {
         let component = self.node_registry.get_node_by_name(name)?;
         let kind_index = component.kind_index;
         let mut children = vec![];
         for child in &component.children.clone() {
-            children.extend(self.create_children(child)?);
+            children.push(self.create_children(child)?);
         }
         let component = self.node_registry.get_node_by_name(name)?;
         Ok(self.node_arena.insert(NodeData {
@@ -636,8 +696,8 @@ impl UI {
         }))
     }
 
-    fn create_children(&mut self, child: &ItemAst) -> ViuiResult<Vec<Idx<NodeData>>> {
-        match child.data() {
+    fn create_children(&mut self, child: &ItemAst) -> ViuiResult<ItemIdx> {
+        Ok(match child.data() {
             ItemDefinition::Node { node } => {
                 let child = node.data();
                 let node_idx = self.create_node(&child.tag)?;
@@ -649,31 +709,43 @@ impl UI {
                 }
                 let mut children = vec![];
                 for child in &child.children {
-                    children.extend(self.create_children(child)?);
+                    children.push(self.create_children(child)?);
                 }
                 self.add_children(&node_idx, children);
-                Ok(vec![node_idx])
+                let item_idx = self.item_arena.insert(NodeItem {
+                    kind: NodeItemKind::Node(node_idx),
+                });
+                item_idx
             }
             ItemDefinition::If(if_item) => {
-                let condition = eval_expression(
-                    self.app_state.state(),
-                    &self.message_string_to_enum_converter,
-                    &if_item.condition,
-                    &|_name| Ok(None),
-                )?;
-                let ExpressionValue::Bool(condition_value) = condition else {
-                    bail!("Condition must be a boolean, instead got {:?}", condition);
+                let item = NodeItem {
+                    kind: NodeItemKind::If(IfItem {
+                        condition_expression: if_item.condition.clone(),
+                        condition: true,
+                        then_item: self.create_children(&if_item.then_item)?,
+                        else_item: if_item
+                            .else_item
+                            .as_ref()
+                            .map(|item| self.create_children(item))
+                            .transpose()?,
+                    }),
                 };
-                if condition_value {
-                    let mut children = vec![];
-                    for child in &if_item.then_items {
-                        children.extend(self.create_children(child)?);
-                    }
-                    return Ok(children);
-                }
-                Ok(vec![])
+                let item_idx = self.item_arena.insert(item);
+                item_idx
             }
-        }
+            ItemDefinition::Block { items } => {
+                let item = NodeItem {
+                    kind: NodeItemKind::Block(BlockItem {
+                        items: items
+                            .iter()
+                            .map(|item| self.create_children(item))
+                            .collect::<ViuiResult<Vec<ItemIdx>>>()?,
+                    }),
+                };
+                let item_idx = self.item_arena.insert(item);
+                item_idx
+            }
+        })
     }
 
     fn register_component_node(&mut self, component_ast: &ComponentAst) {
@@ -688,16 +760,10 @@ impl UI {
         )
     }
 
-    #[allow(dead_code)]
-    fn set_children(&mut self, parent: &Idx<NodeData>, children: Vec<Idx<NodeData>>) {
-        self.node_arena.index_mut(parent).children = children;
-    }
-
-    fn add_children(&mut self, parent: &Idx<NodeData>, children: Vec<Idx<NodeData>>) {
+    fn add_children(&mut self, parent: &NodeIdx, children: Vec<ItemIdx>) {
         self.node_arena.index_mut(parent).children.extend(children);
     }
 }
-
 fn eval_expression(
     app_state: &dyn Reflect,
     converter: &MessageStringToEnumConverter,

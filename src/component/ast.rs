@@ -73,15 +73,16 @@ pub struct PropDefinition {
 
 #[derive(Debug, Clone)]
 pub enum ItemDefinition {
+    Block { items: Vec<ItemAst> },
     Node { node: NodeAst },
-    If(IfItem),
+    If(Box<IfItemDefinition>),
 }
 
 #[derive(Debug, Clone)]
-pub struct IfItem {
+pub struct IfItemDefinition {
     pub condition: ExpressionAst,
-    pub then_items: Vec<ItemAst>,
-    pub else_items: Vec<ItemAst>,
+    pub then_item: ItemAst,
+    pub else_item: Option<ItemAst>,
 }
 
 pub type ItemAst = AstNode<ItemDefinition>;
@@ -181,19 +182,22 @@ fn item_ast_to_tree(item_ast: &ItemAst) -> Tree<String> {
         ItemDefinition::If(if_item) => {
             let mut if_tree = expression_ast_to_tree(&if_item.condition);
             if_tree.root.insert_str(0, "if ");
-            let mut then_tree = Tree::new("then".to_string());
-            for child in &if_item.then_items {
-                then_tree.push(item_ast_to_tree(child));
-            }
+            let mut then_tree = item_ast_to_tree(&if_item.then_item);
+            then_tree.root = "then".to_string();
             if_tree.push(then_tree);
-            if !if_item.else_items.is_empty() {
-                let mut else_tree = Tree::new("else".to_string());
-                for child in &if_item.else_items {
-                    else_tree.push(item_ast_to_tree(child));
-                }
+            if let Some(else_item) = &if_item.else_item {
+                let mut else_tree = item_ast_to_tree(else_item);
+                else_tree.root = "else".to_string();
                 if_tree.push(else_tree);
             }
             if_tree
+        }
+        ItemDefinition::Block { items } => {
+            let mut tree = Tree::new("".to_string());
+            for item in items {
+                tree.push(item_ast_to_tree(item));
+            }
+            tree
         }
     }
 }

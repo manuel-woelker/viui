@@ -1,6 +1,6 @@
 use crate::bail;
 use crate::component::ast::{
-    ComponentAst, ComponentDefinition, ExpressionAst, ExpressionKind, IfItem, ItemAst,
+    ComponentAst, ComponentDefinition, ExpressionAst, ExpressionKind, IfItemDefinition, ItemAst,
     ItemDefinition, NodeAst, NodeDefinition, PropAst, PropDefinition, UIAst, UIDefinition,
 };
 use crate::component::lexer::{lex, Token, TokenKind};
@@ -74,7 +74,7 @@ impl<'a> Parser<'a> {
             TokenKind::Identifier => ItemDefinition::Node {
                 node: self.parse_node()?,
             },
-            TokenKind::If => ItemDefinition::If(self.parse_if()?),
+            TokenKind::If => ItemDefinition::If(Box::new(self.parse_if()?)),
             _ => {
                 bail!(
                     "Found {:?} {}, but expected node, if or for",
@@ -89,21 +89,26 @@ impl<'a> Parser<'a> {
         ))
     }
 
-    fn parse_if(&mut self) -> ViuiResult<IfItem> {
+    fn parse_if(&mut self) -> ViuiResult<IfItemDefinition> {
         self.consume(TokenKind::If, "Expected 'if'")?;
         self.consume(TokenKind::OpenParen, "Expected '('")?;
         let condition = self.parse_expression()?;
         self.consume(TokenKind::CloseParen, "Expected ')'")?;
         self.consume(TokenKind::OpenBrace, "Expected '{'")?;
+        let start = self.current_token().span.start;
         let mut then_items = vec![];
         while !self.is_at(TokenKind::CloseBrace) {
             then_items.push(self.parse_item()?);
         }
+        let then_end = self.previous_token().span.end;
         self.consume(TokenKind::CloseBrace, "Expected '}'")?;
-        Ok(IfItem {
+        Ok(IfItemDefinition {
             condition,
-            then_items,
-            else_items: vec![],
+            then_item: ItemAst::new(
+                Span::new(start, then_end),
+                ItemDefinition::Block { items: then_items },
+            ),
+            else_item: None,
         })
     }
 
