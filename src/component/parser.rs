@@ -1,7 +1,8 @@
 use crate::bail;
 use crate::component::ast::{
-    ComponentAst, ComponentDefinition, ExpressionAst, ExpressionKind, IfItemDefinition, ItemAst,
-    ItemDefinition, NodeAst, NodeDefinition, PropAst, PropDefinition, UIAst, UIDefinition,
+    ComponentAst, ComponentDefinition, ExpressionAst, ExpressionKind, ForItemDefinition,
+    IfItemDefinition, ItemAst, ItemDefinition, NodeAst, NodeDefinition, PropAst, PropDefinition,
+    UIAst, UIDefinition,
 };
 use crate::component::lexer::{lex, Token, TokenKind};
 use crate::component::span::Span;
@@ -75,6 +76,7 @@ impl<'a> Parser<'a> {
                 node: self.parse_node()?,
             },
             TokenKind::If => ItemDefinition::If(Box::new(self.parse_if()?)),
+            TokenKind::For => ItemDefinition::For(Box::new(self.parse_for()?)),
             _ => {
                 bail!(
                     "Found {:?} {}, but expected node, if or for",
@@ -109,6 +111,37 @@ impl<'a> Parser<'a> {
                 ItemDefinition::Block { items: then_items },
             ),
             else_item: None,
+        })
+    }
+
+    fn parse_for(&mut self) -> ViuiResult<ForItemDefinition> {
+        self.consume(TokenKind::For, "Expected 'for'")?;
+        self.consume(TokenKind::OpenParen, "Expected '('")?;
+        let binding_name = self
+            .consume(
+                TokenKind::Identifier,
+                "Expected identifier in for expression",
+            )?
+            .lexeme
+            .to_string();
+        self.consume(TokenKind::In, "Expected 'in' in for expression")?;
+        let expression = self.parse_expression()?;
+        self.consume(TokenKind::CloseParen, "Expected ')'")?;
+        self.consume(TokenKind::OpenBrace, "Expected '{'")?;
+        let start = self.current_token().span.start;
+        let mut each_items = vec![];
+        while !self.is_at(TokenKind::CloseBrace) {
+            each_items.push(self.parse_item()?);
+        }
+        let for_end = self.previous_token().span.end;
+        self.consume(TokenKind::CloseBrace, "Expected '}'")?;
+        Ok(ForItemDefinition {
+            binding_name,
+            expression,
+            each_item: ItemAst::new(
+                Span::new(start, for_end),
+                ItemDefinition::Block { items: each_items },
+            ),
         })
     }
 
@@ -456,6 +489,15 @@ mod tests {
                             └── Node label
             "#]];
 
+        parse_for, "component simple {for(item in items) {label button}}",
+            expect![[r#"
+                UIDefinition
+                └── Component simple
+                    └── for item in VarUse items
+                        └── each
+                            ├── Node label
+                            └── Node button
+            "#]];
     );
 
     #[test]

@@ -745,6 +745,9 @@ impl UI {
                 let item_idx = self.item_arena.insert(item);
                 item_idx
             }
+            ItemDefinition::For(_) => {
+                todo!("for loops");
+            }
         })
     }
 

@@ -21,6 +21,8 @@ pub enum TokenKind {
     At,
     If,
     Else,
+    For,
+    In,
     Component,
     Comma,
 }
@@ -55,6 +57,8 @@ static KEYWORDS: phf::Map<&'static str, TokenKind> = phf_map! {
     "component" => TokenKind::Component,
     "if" => TokenKind::If,
     "else" => TokenKind::Else,
+    "for" => TokenKind::For,
+    "in" => TokenKind::In,
 };
 
 impl<'a> Lexer<'a> {
@@ -409,5 +413,14 @@ mod tests {
             <Else> 'else' 0+4
             <EOF> '' 4+0
         "#]];
+        test_for, "for", expect![[r#"
+            <For> 'for' 0+3
+            <EOF> '' 3+0
+        "#]];
+        test_in, "in", expect![[r#"
+            <In> 'in' 0+2
+            <EOF> '' 2+0
+        "#]];
+
     );
 }

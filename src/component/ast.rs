@@ -76,6 +76,7 @@ pub enum ItemDefinition {
     Block { items: Vec<ItemAst> },
     Node { node: NodeAst },
     If(Box<IfItemDefinition>),
+    For(Box<ForItemDefinition>),
 }
 
 #[derive(Debug, Clone)]
@@ -83,6 +84,13 @@ pub struct IfItemDefinition {
     pub condition: ExpressionAst,
     pub then_item: ItemAst,
     pub else_item: Option<ItemAst>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ForItemDefinition {
+    pub expression: ExpressionAst,
+    pub binding_name: String,
+    pub each_item: ItemAst,
 }
 
 pub type ItemAst = AstNode<ItemDefinition>;
@@ -191,6 +199,16 @@ fn item_ast_to_tree(item_ast: &ItemAst) -> Tree<String> {
                 if_tree.push(else_tree);
             }
             if_tree
+        }
+        ItemDefinition::For(for_item) => {
+            let mut for_tree = expression_ast_to_tree(&for_item.expression);
+            for_tree
+                .root
+                .insert_str(0, &format!("for {} in ", for_item.binding_name));
+            let mut each_tree = item_ast_to_tree(&for_item.each_item);
+            each_tree.root += "each";
+            for_tree.push(each_tree);
+            for_tree
         }
         ItemDefinition::Block { items } => {
             let mut tree = Tree::new("".to_string());
