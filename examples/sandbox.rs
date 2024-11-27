@@ -14,6 +14,7 @@ struct AppState {
     gain: Float,
     name: String,
     show_image: bool,
+    nicknames: Vec<String>,
 }
 
 #[derive(Debug, Reflect, Serialize, Deserialize)]
@@ -39,6 +40,7 @@ fn main_internal() -> ViuiResult<()> {
         counter: 3,
         gain: 3.0,
         name: "Bob".to_string(),
+        nicknames: vec!["Foo".to_string(), "Bar".to_string(), "Baz".to_string()],
         show_image: true,
     });
     let counter_path = TypedPath::<i32>::new(ParsedPath::parse("counter")?);

@@ -33,6 +33,7 @@ pub struct LayoutInfo {
     pub bounds: Rect,
 }
 
+#[derive(Clone)]
 pub struct PropExpression {
     pub field_name: String,
     pub expression: ExpressionAst,

@@ -22,6 +22,7 @@ pub enum ExpressionValue {
     String(String),
     Reflect(Arc<dyn Reflect>),
     Function(FunctionValue),
+    Vec(Vec<ExpressionValue>),
 }
 
 impl ExpressionValue {
@@ -96,6 +97,7 @@ impl ExpressionValue {
             ExpressionValue::Reflect(reflect) => &**reflect,
             ExpressionValue::Bool(value) => value,
             ExpressionValue::Function(_) => todo!("Function as reflect"),
+            ExpressionValue::Vec(_) => todo!("Function as reflect"),
         }
     }
     pub(crate) fn as_reflect_box(&self) -> Box<dyn Reflect> {
@@ -105,6 +107,7 @@ impl ExpressionValue {
             ExpressionValue::Bool(value) => Box::new(*value),
             ExpressionValue::Reflect(_reflect) => todo!("Reflect clone"),
             ExpressionValue::Function(_) => todo!("Function as reflect"),
+            ExpressionValue::Vec(_) => todo!("Function as reflect"),
         }
     }
 }
@@ -117,6 +120,7 @@ impl Display for ExpressionValue {
             ExpressionValue::String(value) => write!(f, "{}", value),
             ExpressionValue::Reflect(reflect) => write!(f, "{:?}", reflect.as_ref()),
             ExpressionValue::Function(_) => write!(f, "Function"),
+            ExpressionValue::Vec(vec) => vec.fmt(f),
         }
     }
 }

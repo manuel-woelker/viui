@@ -125,6 +125,10 @@ impl NodeRegistry {
             .ok_or_else(|| err!("Could not find node: {}", name))?])
     }
 
+    pub fn get_node_by_kind(&self, node_kind: usize) -> ViuiResult<&NodeDescriptor> {
+        Ok(&self.nodes[node_kind])
+    }
+
     pub fn make_node_props(&self, name: &str) -> ViuiResult<Box<dyn NodeProps>> {
         (self.get_node_by_name(name)?.make_props)()
     }

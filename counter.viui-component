@@ -3,8 +3,10 @@ component CounterComponent {
 	LabelComponent()
 	spinner()
 	hstack {
-		label(label=`A`)
-		label(label=`B`)
+		for(nickname in nicknames) {
+	//		label(label=nickname)
+			label(label="AFFFadadad")
+		}
 	}
 	// Image
 	button(label="Toggle Image" @click=ToggleImage)

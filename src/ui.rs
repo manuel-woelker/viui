@@ -18,7 +18,7 @@ use crate::nodes::elements::label::LabelElement;
 use crate::nodes::elements::spinner::SpinnerElement;
 use crate::nodes::elements::textinput::TextInputElement;
 use crate::nodes::events::{InputEvent, MouseEventKind, UiEvent, UiEventKind};
-use crate::nodes::item::{BlockItem, IfItem, ItemIdx, NodeItem, NodeItemKind};
+use crate::nodes::item::{BlockItem, ForItem, IfItem, ItemIdx, NodeItem, NodeItemKind};
 use crate::nodes::registry::NodeRegistry;
 use crate::nodes::types::NodeEvents;
 use crate::observable_state::ObservableState;
@@ -34,6 +34,7 @@ use bevy_reflect::{
     Typed, VariantInfo,
 };
 use crossbeam_channel::{select, tick, Receiver, Sender};
+use itertools::{EitherOrBoth, Itertools};
 use log::debug;
 use notify::{RecommendedWatcher, RecursiveMode};
 use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
@@ -233,7 +234,6 @@ impl UI {
     }
 
     pub fn eval_layout_and_redraw(&mut self) -> ViuiResult<()> {
-        self.set_root_node()?; // TODO: remove
         self.eval_expressions()?;
         self.perform_layout()?;
         self.redraw()?;
@@ -377,79 +377,193 @@ impl UI {
     }
 
     pub fn eval_expressions(&mut self) -> ViuiResult<()> {
-        let mut todo = vec![self.root_item_idx];
-        while let Some(item_idx) = todo.pop() {
-            let item = &mut self.item_arena[&item_idx];
-            match &mut item.kind {
-                NodeItemKind::Node(node_idx) => {
-                    let node = &mut self.node_arena[node_idx];
-                    todo.extend(node.children.iter());
-                    for expression in &node.prop_expressions {
-                        let prop = node.props.reflect_path_mut(&*expression.field_name)?;
-                        let app_state = self.app_state.state();
-                        let value = eval_expression(
-                            app_state,
-                            &self.message_string_to_enum_converter,
-                            &expression.expression,
-                            &|_name| Ok(None),
-                        )?;
-                        if let Some(prop) = prop.downcast_mut::<f32>() {
-                            let ExpressionValue::Float(value) = value else {
-                                bail!(
-                                    "Expected float for property {}, but was: {}",
-                                    expression.field_name,
-                                    value
-                                );
+        self.eval_expressions_internal(self.root_item_idx)
+    }
+
+    pub fn eval_expressions_internal(&mut self, item_idx: ItemIdx) -> ViuiResult<()> {
+        enum Todo {
+            Item(ItemIdx),
+            CloneItem {
+                template_idx: ItemIdx,
+                for_idx: ItemIdx,
+            },
+            /*            PushBinding {
+                name: String,
+                value: ExpressionValue,
+            },
+            PopBinding {
+                name: String,
+            },*/
+        }
+        let mut todos = vec![Todo::Item(item_idx)];
+        while let Some(todo) = todos.pop() {
+            match todo {
+                Todo::Item(item_idx) => {
+                    let item = &mut self.item_arena[&item_idx];
+                    match &mut item.kind {
+                        NodeItemKind::Node(node_idx) => {
+                            let node = &mut self.node_arena[node_idx];
+                            todos.extend(node.children.iter().map(|item| Todo::Item(*item)));
+                            for expression in &node.prop_expressions {
+                                let prop = node.props.reflect_path_mut(&*expression.field_name)?;
+                                let app_state = self.app_state.state();
+                                let value = eval_expression(
+                                    app_state,
+                                    &self.message_string_to_enum_converter,
+                                    &expression.expression,
+                                    &|_name| Ok(None),
+                                )?;
+                                if let Some(prop) = prop.downcast_mut::<f32>() {
+                                    let ExpressionValue::Float(value) = value else {
+                                        bail!(
+                                            "Expected float for property {}, but was: {}",
+                                            expression.field_name,
+                                            value
+                                        );
+                                    };
+                                    *prop = value;
+                                } else if let Some(prop) = prop.downcast_mut::<i32>() {
+                                    let ExpressionValue::Float(value) = value else {
+                                        bail!(
+                                            "Expected number for property {}, but was: {}",
+                                            expression.field_name,
+                                            value
+                                        );
+                                    };
+                                    *prop = value as i32;
+                                } else if let Some(prop) = prop.downcast_mut::<String>() {
+                                    let ExpressionValue::String(value) = value else {
+                                        bail!(
+                                            "Expected string for property {}, but was: {}",
+                                            expression.field_name,
+                                            value
+                                        );
+                                    };
+                                    *prop = value;
+                                } else {
+                                    error!(
+                                        "Unsupported property type for {}: {}",
+                                        expression.field_name,
+                                        prop.reflect_short_type_path()
+                                    );
+                                }
+                            }
+                        }
+                        NodeItemKind::If(ref mut if_item) => {
+                            let value = eval_expression(
+                                self.app_state.state(),
+                                &self.message_string_to_enum_converter,
+                                &if_item.condition_expression,
+                                &|_name| Ok(None),
+                            )?;
+                            let ExpressionValue::Bool(condition_value) = value else {
+                                bail!("Condition must be a boolean, instead got {:?}", value);
                             };
-                            *prop = value;
-                        } else if let Some(prop) = prop.downcast_mut::<i32>() {
-                            let ExpressionValue::Float(value) = value else {
-                                bail!(
-                                    "Expected number for property {}, but was: {}",
-                                    expression.field_name,
-                                    value
-                                );
+                            if_item.condition = condition_value;
+                            if condition_value {
+                                todos.push(Todo::Item(if_item.then_item));
+                            }
+                        }
+                        NodeItemKind::Block(block_item) => {
+                            todos.extend(block_item.items.iter().map(|item| Todo::Item(*item)));
+                        }
+                        NodeItemKind::For(ref mut for_item) => {
+                            let value = eval_expression(
+                                self.app_state.state(),
+                                &self.message_string_to_enum_converter,
+                                &for_item.expression,
+                                &|_name| Ok(None),
+                            )?;
+                            let ExpressionValue::Vec(values) = value else {
+                                bail!("For expression must be a vector, instead got {:?}", value);
                             };
-                            *prop = value as i32;
-                        } else if let Some(prop) = prop.downcast_mut::<String>() {
-                            let ExpressionValue::String(value) = value else {
-                                bail!(
-                                    "Expected string for property {}, but was: {}",
-                                    expression.field_name,
-                                    value
-                                );
-                            };
-                            *prop = value;
-                        } else {
-                            error!(
-                                "Unsupported property type for {}: {}",
-                                expression.field_name,
-                                prop.reflect_short_type_path()
-                            );
+                            dbg!(for_item.items.len());
+                            for value in values.into_iter().zip_longest(for_item.items.iter()) {
+                                match &value {
+                                    EitherOrBoth::Both(value, item_idx) => {
+                                        todos.push(Todo::Item(**item_idx));
+                                    }
+                                    EitherOrBoth::Left(value) => {
+                                        //let item_idx = self.clone_item(for_item.item_template)?;
+                                        todos.push(Todo::CloneItem {
+                                            template_idx: for_item.item_template,
+                                            for_idx: item_idx,
+                                        });
+                                    }
+                                    EitherOrBoth::Right(_) => {
+                                        // TODO: remove items
+                                    }
+                                }
+                            }
                         }
                     }
                 }
-                NodeItemKind::If(ref mut if_item) => {
-                    let value = eval_expression(
-                        self.app_state.state(),
-                        &self.message_string_to_enum_converter,
-                        &if_item.condition_expression,
-                        &|_name| Ok(None),
-                    )?;
-                    let ExpressionValue::Bool(condition_value) = value else {
-                        bail!("Condition must be a boolean, instead got {:?}", value);
+                Todo::CloneItem {
+                    template_idx,
+                    for_idx,
+                } => {
+                    let item_idx = self.clone_item(template_idx)?;
+                    let item = &mut self.item_arena[&for_idx];
+                    let NodeItemKind::For(ref mut for_item) = item.kind else {
+                        bail!("Expected for item");
                     };
-                    if_item.condition = condition_value;
-                    if condition_value {
-                        todo.push(if_item.then_item);
-                    }
-                }
-                NodeItemKind::Block(block_item) => {
-                    todo.extend(block_item.items.iter());
+                    for_item.items.push(item_idx);
                 }
             }
         }
         Ok(())
+    }
+
+    fn clone_item(&mut self, old_item_idx: ItemIdx) -> ViuiResult<ItemIdx> {
+        let old_item = &self.item_arena[&old_item_idx];
+        let mut new_item = old_item.clone();
+        match &mut new_item.kind {
+            NodeItemKind::Node(node_idx) => {
+                *node_idx = self.clone_node(*node_idx)?;
+            }
+            NodeItemKind::If(if_item) => {
+                if_item.then_item = self.clone_item(if_item.then_item)?;
+                if let Some(else_item) = &mut if_item.else_item {
+                    *else_item = self.clone_item(*else_item)?;
+                }
+            }
+            NodeItemKind::Block(block_item) => {
+                for item in &mut block_item.items {
+                    *item = self.clone_item(*item)?;
+                }
+            }
+            NodeItemKind::For(for_item) => {
+                for_item.item_template = self.clone_item(for_item.item_template)?;
+                for item in &mut for_item.items {
+                    *item = self.clone_item(*item)?;
+                }
+            }
+        }
+        let new_item_idx = self.item_arena.insert(new_item);
+        Ok(new_item_idx)
+    }
+
+    fn clone_node(&mut self, old_node_idx: NodeIdx) -> ViuiResult<NodeIdx> {
+        let mut children = self.node_arena[&old_node_idx].children.clone();
+        for child in &mut children {
+            *child = self.clone_item(*child)?;
+        }
+        let old_node = &self.node_arena[&old_node_idx];
+        let component = self.node_registry.get_node_by_kind(old_node.kind_index)?;
+        let state = (component.make_state)()?;
+        let props = (component.make_props)()?;
+        let new_node = NodeData {
+            tag: old_node.tag.clone(),
+            kind_index: old_node.kind_index,
+            state,
+            props,
+            layout: old_node.layout.clone(),
+            prop_expressions: old_node.prop_expressions.clone(),
+            event_mappings: old_node.event_mappings.clone(),
+            children,
+        };
+        let new_node_idx = self.node_arena.insert(new_node);
+        Ok(new_node_idx)
     }
 
     pub fn perform_layout(&mut self) -> ViuiResult<()> {
@@ -515,6 +629,12 @@ impl UI {
                     }
                     NodeItemKind::Block(block_item) => {
                         for child in block_item.items.iter().rev() {
+                            todo.push((parent_layout_id, *child));
+                        }
+                    }
+                    NodeItemKind::For(for_item) => {
+                        dbg!(for_item.items.len());
+                        for child in for_item.items.iter().rev() {
                             todo.push((parent_layout_id, *child));
                         }
                     }
@@ -615,6 +735,7 @@ impl UI {
                     }
                 }
                 NodeItemKind::Block(block_item) => todo.extend(block_item.items.iter()),
+                NodeItemKind::For(for_item) => todo.extend(for_item.items.iter()),
             }
         }
         Ok(render_context.render_queue())
@@ -745,8 +866,17 @@ impl UI {
                 let item_idx = self.item_arena.insert(item);
                 item_idx
             }
-            ItemDefinition::For(_) => {
-                todo!("for loops");
+            ItemDefinition::For(for_item) => {
+                let item = NodeItem {
+                    kind: NodeItemKind::For(ForItem {
+                        binding_name: for_item.binding_name.clone(),
+                        expression: for_item.expression.clone(),
+                        item_template: self.create_children(&for_item.each_item)?,
+                        items: vec![],
+                    }),
+                };
+                let item_idx = self.item_arena.insert(item);
+                item_idx
             }
         })
     }
@@ -786,6 +916,13 @@ fn eval_expression(
                 Ok(ExpressionValue::String(value.clone()))
             } else if let Some(value) = value.downcast_ref::<bool>() {
                 Ok(ExpressionValue::Bool(*value))
+            } else if let Some(value) = value.downcast_ref::<Vec<String>>() {
+                Ok(ExpressionValue::Vec(
+                    value
+                        .iter()
+                        .map(|s| ExpressionValue::String(s.clone()))
+                        .collect(),
+                ))
             } else {
                 bail!(
                     "Unsupported property type for {}: {}",
