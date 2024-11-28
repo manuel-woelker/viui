@@ -5,7 +5,7 @@ component CounterComponent {
 	hstack {
 		for(nickname in nicknames) {
 	//		label(label=nickname)
-			label(label="AFFFadadad")
+			label(label=`Nick: ${nickname}`)
 		}
 	}
 	// Image

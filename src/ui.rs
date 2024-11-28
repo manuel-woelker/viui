@@ -4,6 +4,7 @@ use crate::component::ast::{ComponentAst, ExpressionAst, ItemAst, ItemDefinition
 use crate::component::eval::eval;
 use crate::component::parser::parse_ui;
 use crate::component::value::ExpressionValue;
+use crate::infrastructure::binding_stack::BindingStack;
 use crate::infrastructure::font_pool::FontPool;
 use crate::infrastructure::image_pool::ImagePool;
 use crate::infrastructure::layout_context::LayoutContext;
@@ -377,23 +378,26 @@ impl UI {
     }
 
     pub fn eval_expressions(&mut self) -> ViuiResult<()> {
-        self.eval_expressions_internal(self.root_item_idx)
+        let mut binding_stack = BindingStack::new();
+        self.eval_expressions_internal(self.root_item_idx, &mut binding_stack)
     }
 
-    pub fn eval_expressions_internal(&mut self, item_idx: ItemIdx) -> ViuiResult<()> {
+    pub fn eval_expressions_internal(
+        &mut self,
+        item_idx: ItemIdx,
+        binding_stack: &mut BindingStack,
+    ) -> ViuiResult<()> {
         enum Todo {
             Item(ItemIdx),
             CloneItem {
                 template_idx: ItemIdx,
                 for_idx: ItemIdx,
             },
-            /*            PushBinding {
+            PushBinding {
                 name: String,
                 value: ExpressionValue,
             },
-            PopBinding {
-                name: String,
-            },*/
+            PopBinding,
         }
         let mut todos = vec![Todo::Item(item_idx)];
         while let Some(todo) = todos.pop() {
@@ -411,7 +415,7 @@ impl UI {
                                     app_state,
                                     &self.message_string_to_enum_converter,
                                     &expression.expression,
-                                    &|_name| Ok(None),
+                                    &|name| Ok(binding_stack.get_binding(name)),
                                 )?;
                                 if let Some(prop) = prop.downcast_mut::<f32>() {
                                     let ExpressionValue::Float(value) = value else {
@@ -477,17 +481,26 @@ impl UI {
                             let ExpressionValue::Vec(values) = value else {
                                 bail!("For expression must be a vector, instead got {:?}", value);
                             };
-                            dbg!(for_item.items.len());
                             for value in values.into_iter().zip_longest(for_item.items.iter()) {
-                                match &value {
+                                match value {
                                     EitherOrBoth::Both(value, item_idx) => {
-                                        todos.push(Todo::Item(**item_idx));
+                                        todos.push(Todo::PopBinding);
+                                        todos.push(Todo::Item(*item_idx));
+                                        todos.push(Todo::PushBinding {
+                                            name: for_item.binding_name.clone(),
+                                            value,
+                                        });
                                     }
                                     EitherOrBoth::Left(value) => {
                                         //let item_idx = self.clone_item(for_item.item_template)?;
+                                        todos.push(Todo::PopBinding);
                                         todos.push(Todo::CloneItem {
                                             template_idx: for_item.item_template,
                                             for_idx: item_idx,
+                                        });
+                                        todos.push(Todo::PushBinding {
+                                            name: for_item.binding_name.clone(),
+                                            value,
                                         });
                                     }
                                     EitherOrBoth::Right(_) => {
@@ -508,6 +521,13 @@ impl UI {
                         bail!("Expected for item");
                     };
                     for_item.items.push(item_idx);
+                }
+                Todo::PushBinding { name, value } => {
+                    binding_stack.push();
+                    binding_stack.add_binding(name, value);
+                }
+                Todo::PopBinding => {
+                    binding_stack.pop();
                 }
             }
         }
@@ -633,7 +653,6 @@ impl UI {
                         }
                     }
                     NodeItemKind::For(for_item) => {
-                        dbg!(for_item.items.len());
                         for child in for_item.items.iter().rev() {
                             todo.push((parent_layout_id, *child));
                         }
