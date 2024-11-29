@@ -8,6 +8,13 @@ component CounterComponent {
 			label(label=`Nick: ${nickname}`)
 		}
 	}
+
+	for(counter in counters) {
+		label(label=`Counter ${counter#index} {counter#path}: ${counter}`)
+		button(label="Increment" @click=Change(1))
+		button(label="Decrement" @click=Change(-1))
+	}
+
 	// Image
 	button(label="Toggle Image" @click=ToggleImage)
 	label(label=`Show Image: ${show_image}`)

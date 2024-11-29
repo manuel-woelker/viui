@@ -115,9 +115,9 @@ impl<'a> Lexer<'a> {
             ',' => {
                 self.create_token(start, TokenKind::Comma);
             }
-            'a'..='z' | 'A'..='Z' | '_' => {
+            'a'..='z' | 'A'..='Z' | '_' | '#' => {
                 self.scanner
-                    .eat_while(|c: char| c.is_ascii_alphanumeric() || c == '_');
+                    .eat_while(|c: char| c.is_ascii_alphanumeric() || c == '_' || c == '#');
                 if let Some(keyword) = KEYWORDS.get(self.scanner.from(start)) {
                     self.create_token(start, *keyword);
                 } else {

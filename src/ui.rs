@@ -393,11 +393,12 @@ impl UI {
                 template_idx: ItemIdx,
                 for_idx: ItemIdx,
             },
-            PushBinding {
+            PushBindings,
+            PopBindings,
+            SetBinding {
                 name: String,
                 value: ExpressionValue,
             },
-            PopBinding,
         }
         let mut todos = vec![Todo::Item(item_idx)];
         while let Some(todo) = todos.pop() {
@@ -481,27 +482,41 @@ impl UI {
                             let ExpressionValue::Vec(values) = value else {
                                 bail!("For expression must be a vector, instead got {:?}", value);
                             };
-                            for value in values.into_iter().zip_longest(for_item.items.iter()) {
+                            for (index, value) in values
+                                .into_iter()
+                                .zip_longest(for_item.items.iter())
+                                .enumerate()
+                            {
                                 match value {
                                     EitherOrBoth::Both(value, item_idx) => {
-                                        todos.push(Todo::PopBinding);
+                                        todos.push(Todo::PopBindings);
                                         todos.push(Todo::Item(*item_idx));
-                                        todos.push(Todo::PushBinding {
+                                        todos.push(Todo::SetBinding {
+                                            name: format!("{}#index", for_item.binding_name),
+                                            value: ExpressionValue::Float(index as f32),
+                                        });
+                                        todos.push(Todo::SetBinding {
                                             name: for_item.binding_name.clone(),
                                             value,
                                         });
+                                        todos.push(Todo::PushBindings);
                                     }
                                     EitherOrBoth::Left(value) => {
                                         //let item_idx = self.clone_item(for_item.item_template)?;
-                                        todos.push(Todo::PopBinding);
+                                        todos.push(Todo::PopBindings);
                                         todos.push(Todo::CloneItem {
                                             template_idx: for_item.item_template,
                                             for_idx: item_idx,
                                         });
-                                        todos.push(Todo::PushBinding {
+                                        todos.push(Todo::SetBinding {
+                                            name: format!("{}#index", for_item.binding_name),
+                                            value: ExpressionValue::Float(index as f32),
+                                        });
+                                        todos.push(Todo::SetBinding {
                                             name: for_item.binding_name.clone(),
                                             value,
                                         });
+                                        todos.push(Todo::PushBindings);
                                     }
                                     EitherOrBoth::Right(_) => {
                                         // TODO: remove items
@@ -522,12 +537,14 @@ impl UI {
                     };
                     for_item.items.push(item_idx);
                 }
-                Todo::PushBinding { name, value } => {
+                Todo::PushBindings => {
                     binding_stack.push();
-                    binding_stack.add_binding(name, value);
                 }
-                Todo::PopBinding => {
+                Todo::PopBindings => {
                     binding_stack.pop();
+                }
+                Todo::SetBinding { name, value } => {
+                    binding_stack.add_binding(name, value);
                 }
             }
         }
@@ -916,6 +933,34 @@ impl UI {
         self.node_arena.index_mut(parent).children.extend(children);
     }
 }
+
+fn reflect_to_value(value: &dyn Reflect) -> ViuiResult<ExpressionValue> {
+    match value.reflect_ref() {
+        ReflectRef::List(list) => {
+            let values = list
+                .iter()
+                .map(|value| reflect_to_value(value))
+                .collect::<ViuiResult<Vec<_>>>()?;
+            return Ok(ExpressionValue::Vec(values));
+        }
+        _ => {}
+    }
+    if let Some(value) = value.downcast_ref::<f32>() {
+        Ok(ExpressionValue::Float(*value))
+    } else if let Some(value) = value.downcast_ref::<i32>() {
+        Ok(ExpressionValue::Float(*value as f32))
+    } else if let Some(value) = value.downcast_ref::<String>() {
+        Ok(ExpressionValue::String(value.clone()))
+    } else if let Some(value) = value.downcast_ref::<bool>() {
+        Ok(ExpressionValue::Bool(*value))
+    } else {
+        bail!(
+            "Unsupported property type: {}",
+            value.reflect_short_type_path()
+        );
+    }
+}
+
 fn eval_expression(
     app_state: &dyn Reflect,
     converter: &MessageStringToEnumConverter,
@@ -927,28 +972,7 @@ fn eval_expression(
             return Ok(value);
         }
         if let Ok(value) = app_state.reflect_path(name) {
-            if let Some(value) = value.downcast_ref::<f32>() {
-                Ok(ExpressionValue::Float(*value))
-            } else if let Some(value) = value.downcast_ref::<i32>() {
-                Ok(ExpressionValue::Float(*value as f32))
-            } else if let Some(value) = value.downcast_ref::<String>() {
-                Ok(ExpressionValue::String(value.clone()))
-            } else if let Some(value) = value.downcast_ref::<bool>() {
-                Ok(ExpressionValue::Bool(*value))
-            } else if let Some(value) = value.downcast_ref::<Vec<String>>() {
-                Ok(ExpressionValue::Vec(
-                    value
-                        .iter()
-                        .map(|s| ExpressionValue::String(s.clone()))
-                        .collect(),
-                ))
-            } else {
-                bail!(
-                    "Unsupported property type for {}: {}",
-                    name,
-                    value.reflect_short_type_path()
-                );
-            }
+            reflect_to_value(value)
         } else {
             converter(name)
         }

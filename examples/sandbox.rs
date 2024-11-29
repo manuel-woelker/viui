@@ -15,6 +15,7 @@ struct AppState {
     name: String,
     show_image: bool,
     nicknames: Vec<String>,
+    counters: Vec<i32>,
 }
 
 #[derive(Debug, Reflect, Serialize, Deserialize)]
@@ -23,6 +24,7 @@ enum AppMessage {
     Decrement,
     Set(Float),
     SetName(String),
+    Change(Float),
     ToggleImage,
 }
 
@@ -41,12 +43,14 @@ fn main_internal() -> ViuiResult<()> {
         gain: 3.0,
         name: "Bob".to_string(),
         nicknames: vec!["Foo".to_string(), "Bar".to_string(), "Baz".to_string()],
-        show_image: true,
+        show_image: false,
+        counters: vec![1, 2, 3],
     });
     let counter_path = TypedPath::<i32>::new(ParsedPath::parse("counter")?);
     let gain_path = TypedPath::<Float>::new(ParsedPath::parse("gain")?);
     let name_path = TypedPath::<String>::new(ParsedPath::parse("name")?);
     let show_image_path = TypedPath::<bool>::new(ParsedPath::parse("show_image")?);
+    let counter_list_path = TypedPath::<i32>::new(ParsedPath::parse("counters[0]")?);
     let mut ui = UI::new(
         app_state,
         "CounterComponent".to_string(),
@@ -74,6 +78,11 @@ fn main_internal() -> ViuiResult<()> {
             AppMessage::ToggleImage => {
                 app_state.apply_change("Toggle image", |mutator| {
                     mutator.mutate(&show_image_path, |show_image| *show_image = !*show_image);
+                });
+            }
+            AppMessage::Change(by) => {
+                app_state.apply_change(format!("Change by {}", by), |mutator| {
+                    mutator.mutate(&counter_list_path, |counter| *counter += *by as i32);
                 });
             }
         },
