@@ -269,9 +269,9 @@ fn render(render_state: &mut RenderState, render_commands: &[RenderCommand]) {
             RenderCommand::Translate { x, y } => {
                 canvas.translate(*x, *y);
             }
-            RenderCommand::ResetTransform => {
+            /*            RenderCommand::ResetTransform => {
                 canvas.reset_transform();
-            }
+            }*/
             RenderCommand::DrawText(text) => {
                 stroke_paint.set_line_width(1.0);
                 stroke_paint.set_anti_alias(true);

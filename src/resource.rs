@@ -29,6 +29,10 @@ impl Resource {
         Ok(std::fs::read(&self.inner.path)?.into_boxed_slice())
     }
 
+    pub fn as_path(&self) -> ViuiResult<String> {
+        Ok(self.inner.path.display().to_string())
+    }
+
     pub fn buf_reader(&self) -> ViuiResult<Box<dyn BufreadSeek>> {
         Ok(Box::new(BufReader::new(std::fs::File::open(
             &self.inner.path,

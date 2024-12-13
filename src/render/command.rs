@@ -33,7 +33,7 @@ pub enum RenderCommand {
         x: Float,
         y: Float,
     },
-    ResetTransform,
+    //    ResetTransform,
     DrawText(String),
     ClipRect(Rect),
     LoadImage {
