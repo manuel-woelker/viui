@@ -17,6 +17,12 @@ pub struct FontIndex {
 }
 
 impl FontIndex {
+    pub fn index(&self) -> usize {
+        self.index
+    }
+}
+
+impl FontIndex {
     pub fn new(index: usize) -> Self {
         FontIndex { index }
     }

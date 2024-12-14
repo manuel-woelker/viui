@@ -38,6 +38,7 @@ rustybuzz = "0.20.1"
 coolor = "1.0.0"
 itertools = "0.13.0"
 svg = "0.18.0"
+pathdiff = "0.2.3"
 
 [dev-dependencies]
 expect-test = "1.5.0"

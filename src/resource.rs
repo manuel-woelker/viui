@@ -45,3 +45,9 @@ impl<T: Into<PathBuf>> From<T> for Resource {
         Self::from_path(value)
     }
 }
+
+impl From<&Resource> for Resource {
+    fn from(value: &Resource) -> Self {
+        value.clone()
+    }
+}

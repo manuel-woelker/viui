@@ -1,0 +1,15 @@
+<svg style="background-color: white" viewBox="0 0 400 40" xmlns="http://www.w3.org/2000/svg">
+<style>
+@font-face { font-family: "font-0"; src: url(../assets/fonts/Quicksand-Regular.ttf) }
+
+</style>
+<g font-family="font-0">
+<g stroke="rgb(0 0 0)">
+<g transform="translate(10 25)">
+<text>
+Hello
+</text>
+</g>
+</g>
+</g>
+</svg>

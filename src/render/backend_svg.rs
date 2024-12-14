@@ -2,25 +2,31 @@ use crate::bail;
 use crate::render::command::RenderCommand;
 use crate::result::ViuiResult;
 use crate::types::Size;
+use pathdiff::diff_paths;
 use std::collections::HashMap;
 use std::io::Write;
-use svg::node::element::Group;
+use std::path::Path;
+use svg::node::element::{Group, Style};
 use svg::{Document, Node};
 
 pub fn render_svg(
     size: Size,
     render_list: &[RenderCommand],
     write: &mut dyn Write,
+    output_path: &Path,
 ) -> ViuiResult<()> {
-    let document = render_svg_document(size, render_list)?;
+    let document = render_svg_document(size, render_list, output_path)?;
     write.write_all(&document.to_string().into_bytes())?;
     Ok(())
 }
 
-pub fn render_svg_document(size: Size, render_list: &[RenderCommand]) -> ViuiResult<Document> {
-    // Create an SVG from
+pub fn render_svg_document(
+    size: Size,
+    render_list: &[RenderCommand],
+    output_path: &Path,
+) -> ViuiResult<Document> {
+    let parent_path = output_path.parent().unwrap();
 
-    let mut document = Document::new().set("viewBox", (0, 0, size.width, size.height));
     #[derive(Debug)]
     struct Entry {
         group: Group,
@@ -61,6 +67,7 @@ pub fn render_svg_document(size: Size, render_list: &[RenderCommand]) -> ViuiRes
             .push(Box::new(group));
     }
     let mut image_map = HashMap::new();
+    let mut style_content = String::new();
     for render_command in render_list {
         match render_command {
             RenderCommand::Line { start, end } => {
@@ -178,6 +185,31 @@ pub fn render_svg_document(size: Size, render_list: &[RenderCommand]) -> ViuiRes
                     entry_stack,
                 );
             }
+            RenderCommand::LoadFont { font_idx, resource } => {
+                let path_string = resource.as_path()?;
+                let resource_path = Path::new(&path_string);
+                let path = if resource_path.is_absolute() {
+                    path_string
+                } else {
+                    diff_paths(resource_path, parent_path)
+                        .unwrap()
+                        .to_str()
+                        .unwrap()
+                        .to_string()
+                        .replace("\\", "/")
+                };
+                style_content += &format!(
+                    "@font-face {{ font-family: \"font-{}\"; src: url({}) }}\n",
+                    font_idx.index(),
+                    path
+                );
+            }
+            RenderCommand::SetFont { font_idx } => {
+                push_group(
+                    Group::new().set("font-family", format!("font-{}", font_idx.index())),
+                    entry_stack,
+                );
+            }
             _ => {
                 bail!("Unsupported render command {:?}", render_command);
             }
@@ -186,6 +218,10 @@ pub fn render_svg_document(size: Size, render_list: &[RenderCommand]) -> ViuiRes
     while entry_stack.len() > 1 {
         pop_stack(entry_stack);
     }
+
+    let mut document = Document::new().set("viewBox", (0, 0, size.width, size.height));
+    document.append(Style::new(style_content));
+
     let root_children = entry_stack.pop().unwrap().children;
     for child in root_children {
         document.append(child);
@@ -203,6 +239,7 @@ mod tests {
     use crate::types::{Color, Point, Rect, Size};
     use expect_test::{expect, Expect};
     use std::fs;
+    use std::path::Path;
 
     #[test]
     fn test_line() {
@@ -221,10 +258,16 @@ mod tests {
 
     fn test_render_svg(name: &str, commands: &[RenderCommand], expected: Expect) {
         let mut buffer = Vec::new();
-        render_svg(Size::new(1000.0, 1000.0), commands, &mut buffer).unwrap();
+        render_svg(
+            Size::new(1000.0, 1000.0),
+            commands,
+            &mut buffer,
+            Path::new(""),
+        )
+        .unwrap();
         let svg = String::from_utf8(buffer).unwrap();
         let file_path = format!("test/{name}.svg");
-        let file_path = std::path::Path::new(&file_path);
+        let file_path = Path::new(&file_path);
         let content = if file_path.exists() {
             fs::read_to_string(file_path).unwrap()
         } else {
