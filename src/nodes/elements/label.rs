@@ -61,7 +61,8 @@ mod tests {
     use crate::render::context::RenderContext;
     use crate::render::parameters::RenderParameters;
     use crate::resource::Resource;
-    use crate::types::Size;
+    use crate::types::{Point, Size};
+    use euclid::Rect;
     use std::fs;
     use std::path::Path;
 
@@ -79,6 +80,7 @@ mod tests {
         let font_resource = Resource::from_path("assets/fonts/Quicksand-Regular.ttf");
         let font_idx = font_pool.load_font(&font_resource).unwrap();
         let styling = Styling::light();
+        //        let styling = Styling::dark();
         let render_parameters = RenderParameters::new(&styling).unwrap();
         let mut node_data = NodeData {
             tag: "".to_string(),
@@ -95,27 +97,28 @@ mod tests {
                 .unwrap();
 
         let mut render_context = RenderContext::new(&mut image_pool, &mut font_pool, 0.0).unwrap();
+        let LayoutConstraints::FixedLayout { width, height } = constraints else {
+            panic!("Expected fixed layout");
+        };
+        let size = Size::new(width, height);
+        render_context.add_command(RenderCommand::SetFillColor(styling.background_color));
+        render_context.add_command(RenderCommand::FillRect {
+            rect: Rect::new(Point::new(0.0, 0.0), size),
+        });
         render_context.add_command(RenderCommand::LoadFont {
             font_idx,
             resource: font_resource,
         });
         render_context.add_command(RenderCommand::SetFont { font_idx });
         (node_descriptor.render_fn)(&mut render_context, &render_parameters, &node_data).unwrap();
-        let LayoutConstraints::FixedLayout { width, height } = constraints else {
-            panic!("Expected fixed layout");
-        };
         let render_queue = render_context.render_queue();
         let name = "label";
-        let file_path = format!("test/{name}.svg");
+        let file_path = format!("test/elements/{name}.svg");
         let file_path = Path::new(&file_path);
+        let parent_path = file_path.parent().unwrap();
+        fs::create_dir_all(parent_path).unwrap();
         let mut buffer = Vec::new();
-        render_svg(
-            Size::new(width, height),
-            &render_queue,
-            &mut buffer,
-            &file_path,
-        )
-        .unwrap();
+        render_svg(size, &render_queue, &mut buffer, &file_path).unwrap();
         let svg = String::from_utf8(buffer).unwrap();
         let content = if file_path.exists() {
             fs::read_to_string(file_path).unwrap()

@@ -8,6 +8,8 @@ pub mod observable_state;
 pub mod render;
 pub mod resource;
 pub mod result;
+#[cfg(test)]
+pub mod test;
 pub mod test_reflect;
 pub mod types;
 pub mod ui;
