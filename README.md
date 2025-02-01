@@ -32,3 +32,36 @@ Since UIs produce a list of render commands, render tests can be written on rend
 **Integrated persistent undo**\
 Using the fine-grained change detection mechanism allows keep track of and reverting to previous states even across
 application restarts.
+
+## Separation of concerns
+
+Concerns should be decoupled from each other, specifically:
+
+### State & logic separation
+
+** Application Data model**\
+The application data should exist independently of any UI.
+
+** Application State Transition Logic**\
+The logic for transitioning from one application state to another should be independent of the UI, and be able to run
+without any UI.
+
+### Presentation separation
+
+** UI Layout
+The positioning of elements in the UI should be independent of its look and content.
+
+** Styling
+The styling of elements (e.g. colors, font faces, margins, borders, etc.) in the UI should be independent of its layout
+
+** Text
+The text content should be independent as well, to allow easier translation
+
+### UI loop separation
+
+** Render commands
+The actual drawing is decoupled by emitting a list of render commands, which are then used to actually draw the UI.
+
+** UI painting
+The UI is drawn in a separate thread, based on the abstract render commands.
+
