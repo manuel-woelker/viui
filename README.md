@@ -1,67 +1,61 @@
-viui is an experimental UI framework with a focus on feedback, flexibility and efficiency
+# Introduction
+
+Viui is an experimental UI framework that focuses on providing fast feedback, flexibility, and efficiency.
 
 ## Goals
 
-- Build a UI framework that is a joy to use
-- Make it easy to quickly iterate on UIs
-- Make it easy to write meaningful tests for UIs
+* Create a UI framework that is enjoyable to use
+* Enable rapid iteration on UIs
+* Make it easy to write meaningful tests for UIs
 
 ## Vision
 
-**Fast feedback**\
-Tight feedback loops are a force multiplier for any UI work. Iterating quickly on an idea let's us more easily get to a
-better solution. Concretely this means the UI can be modified while the application is running.
+### Fast Feedback
 
-**Flexibility**\
-The UI should not be tied to any specific implementation but rather sit on top of an abstraction layer that accepts
-drawing commands and emits user events
+Fast feedback loops are essential for effective UI development. By allowing the UI to be modified while the application
+is running, we can quickly test and refine our ideas.
 
-**Efficiency**\
-The UI should reduce unnecessary work, both developer and machine work. Specifically this means only drawing
-things that have changed.
+### Flexibility
 
-## Implementation ideas
+The UI should be decoupled from specific implementations and instead rely on an abstraction layer that accepts drawing
+commands and emits user events.
 
-**Hot reloading, declarative UI**\
-The UI is written as simple files in a custom UI modelling language. Changing this definition updates the UI while it is
-runnning. A special design mode should allow editing the UI while it is running.
+### Efficiency
 
-**Render tests**\
-Since UIs produce a list of render commands, render tests can be written on render commands or as SVG screenshots.
+The UI should minimize unnecessary work, both for developers and machines. This means only drawing what has changed.
 
-**Integrated persistent undo**\
-Using the fine-grained change detection mechanism allows keep track of and reverting to previous states even across
-application restarts.
+## Implementation Ideas
 
-## Separation of concerns
+### Hot Reloading, Declarative UI
 
-Concerns should be decoupled from each other, specifically:
+The UI is defined using simple files in a custom UI modeling language. Changes to this definition update the UI in
+real-time. A special design mode allows editing the UI while it's running.
 
-### State & logic separation
+### Render Tests
 
-** Application Data model**\
-The application data should exist independently of any UI.
+Since UIs produce a list of render commands, we can write tests for these commands or use SVG screenshots.
 
-** Application State Transition Logic**\
-The logic for transitioning from one application state to another should be independent of the UI, and be able to run
-without any UI.
+### Integrated Persistent Undo
 
-### Presentation separation
+Using fine-grained change detection, we can track and revert to previous states even across application restarts.
 
-** UI Layout
-The positioning of elements in the UI should be independent of its look and content.
+## Separation of Concerns
 
-** Styling
-The styling of elements (e.g. colors, font faces, margins, borders, etc.) in the UI should be independent of its layout
+Concerns should be decoupled from each other:
 
-** Text
-The text content should be independent as well, to allow easier translation
+### State & Logic Separation
 
-### UI loop separation
+* **Application Data Model**: The application data should exist independently of any UI.
+* **Application State Transition Logic**: The logic for transitioning between application states should be independent
+  of the UI and run without it.
 
-** Render commands
-The actual drawing is decoupled by emitting a list of render commands, which are then used to actually draw the UI.
+### Presentation Separation
 
-** UI painting
-The UI is drawn in a separate thread, based on the abstract render commands.
+* **UI Layout**: The positioning of elements should be independent of their look and content.
+* **Styling**: The styling of elements should be independent of their layout.
+* **Text**: The text content should be independent for easier translation.
 
+### UI Loop Separation
+
+* **Render Commands**: The actual drawing is decoupled by emitting a list of render commands.
+* **UI Painting**: The UI painting is decoupled from the UI loop, allowing parallel execution.
