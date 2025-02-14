@@ -1,0 +1,15 @@
+site:
+  title: My Documentation Site
+  url: https://example.com
+  start_page: index.adoc
+
+content:
+  sources:
+    - url: ./devguide
+      branches: HEAD
+      start_path: devguide.adoc
+
+ui:
+  bundle:
+    url: https://gitlab.com/antora/antora-ui-default/-/jobs/artifacts/master/raw/build/ui-bundle.zip?job=bundle-stable
+    snapshot: true

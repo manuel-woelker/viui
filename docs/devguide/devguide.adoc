@@ -1,0 +1,86 @@
+# viui DevGuide
+
+*Welcome to the Developer Guide!*
+
+This guide is designed to help developers get started with our codebase and understand the overall architecture, design principles, and best practices for contributing to our project.
+Whether you're a new team member or an external contributor, this guide aims to provide a comprehensive overview of our development environment, tools, and workflows.
+
+Within this guide, you'll find information on:
+
+* Project structure and organization
+* Technology stack and dependencies
+* Development workflows and pipelines
+* Coding standards and best practices
+* Testing and debugging strategies
+* Collaboration and contribution guidelines
+* By following this guide, you'll be well-equipped to navigate our codebase, write high-quality code, and participate in our development community.
+If you have any questions or need further clarification on any topic, don't hesitate to ask.
+
+## Getting Started
+
+Before diving in, make sure you have the following:
+
+* A basic understanding of programming concepts and software development principles
+* Familiarity with our programming languages and technologies (listed in the Technology Stack section)
+* Access to our code repository and development tools (detailed in the Development Environment section)
+
+Let's get started!
+
+Preliminary outline - work in progress:
+
+== I. Introduction
+
+* Welcome and purpose of the guide
+* Overview of the project and its goals
+
+== II. Project Structure and Organization
+
+* Overview of the codebase directory structure
+* Explanation of the different components and modules
+* Discussion of the relationships between components
+
+== III. Technology Stack
+
+* List of programming languages and technologies used
+* Description of the frameworks, libraries, and tools employed
+* Version numbers and dependencies
+
+== IV. Development Environment
+
+* Setup and configuration instructions for the development environment
+* List of required tools and software
+* Explanation of the build and deployment processes
+
+== V. Development Workflows and Pipelines
+
+* Overview of the development workflow and lifecycle
+* Explanation of the different stages (e.g. coding, testing, review, deployment)
+* Discussion of the tools and processes used at each stage
+
+== VI. Coding Standards and Best Practices
+
+* Guidelines for coding style and conventions
+* Best practices for writing clean, readable, and maintainable code
+* Discussion of testing and debugging strategies
+
+== VII. Testing and Debugging
+
+* Overview of the testing framework and tools used
+* Explanation of the different types of tests (e.g. unit, integration, UI)
+* Discussion of debugging techniques and tools
+
+== VIII. Collaboration and Contribution
+
+* Guidelines for contributing to the project
+* Explanation of the code review process
+* Discussion of communication channels and community involvement
+
+== IX. Conclusion
+
+* Recap of the key points and takeaways
+* Final thoughts and next steps
+
+== X. Appendices
+
+* Additional resources and references
+* Glossary of terms and definitions
