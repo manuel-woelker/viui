@@ -1,4 +1,4 @@
-# viui DevGuide
+= viui DevGuide
 
 *Welcome to the Developer Guide!*
 
@@ -16,7 +16,7 @@ Within this guide, you'll find information on:
 * By following this guide, you'll be well-equipped to navigate our codebase, write high-quality code, and participate in our development community.
 If you have any questions or need further clarification on any topic, don't hesitate to ask.
 
-## Getting Started
+== Getting Started
 
 Before diving in, make sure you have the following:
 
