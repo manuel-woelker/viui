@@ -55,18 +55,21 @@ impl Element for TextInputElement {
         });
 
         render_context.add_command(RenderCommand::SetStrokeColor(styling.text_color));
-        if let Some(mut edit_position) = state.edit_position {
-            edit_position = edit_position.clamp(0, props.text.len());
-            if render_context.time() % 1.0 < 0.5 {
-                let size = render_context
-                    .measure_text(&props.text[0..edit_position])
-                    .unwrap();
-                render_context.add_command(RenderCommand::FillRect {
-                    rect: Rect::new(
-                        Point::new(11.0 + size.width, stroke_width + 2.0),
-                        Size::new(2.0, 30.0),
-                    ),
-                });
+        if render_context.is_active() {
+            if let Some(mut edit_position) = state.edit_position {
+                edit_position = edit_position.clamp(0, props.text.len());
+                if render_context.time() % 1.0 < 0.5 {
+                    let size = render_context
+                        .measure_text(&props.text[0..edit_position])
+                        .unwrap();
+                    render_context.add_command(RenderCommand::SetFillColor(styling.text_color));
+                    render_context.add_command(RenderCommand::FillRect {
+                        rect: Rect::new(
+                            Point::new(11.0 + size.width, stroke_width + 2.0),
+                            Size::new(2.0, 30.0),
+                        ),
+                    });
+                }
             }
         }
 

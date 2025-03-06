@@ -13,6 +13,7 @@ pub struct RenderContext<'a> {
     font_pool: &'a mut FontPool,
     time: Float,
     is_animated: bool,
+    is_active: bool,
 }
 
 impl<'a> RenderContext<'a> {
@@ -39,6 +40,7 @@ impl<'a> RenderContext<'a> {
             font_pool,
             time,
             is_animated: false,
+            is_active: false,
         })
     }
 }
@@ -75,5 +77,13 @@ impl RenderContext<'_> {
     pub fn measure_text(&self, text: &str) -> ViuiResult<TextMeasurement> {
         self.font_pool
             .measure_text(FontIndex::new(0), text, self.font_size)
+    }
+
+    pub fn set_active(&mut self, active: bool) {
+        self.is_active = active;
+    }
+
+    pub fn is_active(&self) -> bool {
+        self.is_active
     }
 }

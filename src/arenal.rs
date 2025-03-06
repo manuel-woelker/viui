@@ -74,6 +74,14 @@ impl<T> Clone for Idx<T> {
 
 impl<T> Copy for Idx<T> {}
 
+impl<T> PartialEq for Idx<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.arenal_id == other.arenal_id
+            && self.generation == other.generation
+            && self.offset == other.offset
+    }
+}
+
 impl<T> Default for Arenal<T> {
     fn default() -> Self {
         Self::new()

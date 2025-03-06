@@ -753,7 +753,7 @@ impl UI {
                         Point::new(0.0, 0.0),
                         node.layout.bounds.size,
                     )));
-
+                    render_context.set_active(self.active_nodes.contains(node_idx));
                     self.node_registry.render_node(
                         &mut render_context,
                         &render_parameters,
