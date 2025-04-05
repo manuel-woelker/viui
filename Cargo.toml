@@ -2,6 +2,7 @@
 name = "viui"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.86.0"
 
 [dependencies]
 femtovg = "0.10.1"

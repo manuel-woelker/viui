@@ -124,7 +124,7 @@ impl UI {
         node_registry.register_node::<ImageElement>();
         node_registry.register_node::<SpinnerElement>();
         let mut font_pool = FontPool::new();
-        font_pool.load_font(Resource::from_path("assets/fonts/Quicksand-Regular.ttf"))?;
+        font_pool.load_font(Resource::from_path("assets/fonts/OpenSans-Regular.ttf"))?;
         Ok(UI {
             root_component_name,
             node_registry,
