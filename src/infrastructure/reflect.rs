@@ -8,16 +8,22 @@ pub trait Reflect: Any {
         0
     }
     fn as_value(&self) -> Value;
+    fn set_value(&mut self, value: Value) -> Result<(), ()>;
+    //    fn type_info(&self) -> &TypeInfo;
+    fn duplicate(&self) -> Box<dyn Reflect>;
 }
 
 impl dyn Reflect {
-    pub fn set_value<T: Any>(&mut self, value: T) -> Result<(), ()> {
+    pub fn assign<T: Any>(&mut self, value: T) -> Result<(), ()> {
         *(self as &mut dyn Any).downcast_mut().ok_or(())? = value;
         Ok(())
     }
 
     pub fn downcast_ref<T: Any>(&self) -> Option<&T> {
         (self as &dyn Any).downcast_ref()
+    }
+    pub fn downcast_mut<T: Any>(&mut self) -> Option<&mut T> {
+        (self as &mut dyn Any).downcast_mut()
     }
 }
 
@@ -30,28 +36,10 @@ pub enum Value {
     Map(),
 }
 
-#[derive(Debug, PartialEq)]
-pub enum PrimitiveValue {
-    Bool(bool),
-    Char(char),
-    I64(i64),
-    U64(u64),
-    I128(i128),
-    U128(u128),
-    I32(i32),
-    U32(u32),
-    I16(i16),
-    U16(u16),
-    I8(i8),
-    U8(u8),
-    Isize(isize),
-    Usize(usize),
-    F32(f32),
-    F64(f64),
-    EmptyTuple(()),
-    String(String),
+pub enum TypeInfo {
+    //Struct(StructInfo),
+    Primitive(PrimitiveTypeInfo),
 }
-
 macro_rules! impl_reflect_for_primitives {
     ($(($type:ty, $variant:ident)),+) => {
         $(
@@ -65,8 +53,35 @@ macro_rules! impl_reflect_for_primitives {
             fn as_value(&self) -> Value {
                 Value::Primitive(PrimitiveValue::$variant(self.clone()))
             }
+
+            fn set_value(&mut self, value: Value) -> Result<(), ()> {
+                match value {
+                    Value::Primitive(PrimitiveValue::$variant(new_value)) => {
+                        *self = new_value;
+                        Ok(())
+                    }
+                    _ => {
+                    Err(())
+                    }
+                }
+            }
+
+            fn duplicate(&self) -> Box<dyn Reflect> {
+                Box::new(self.clone())
+            }
         }
         )+
+
+            #[derive(Debug, PartialEq)]
+    pub enum PrimitiveValue {
+            $($variant($type),
+    )+
+        }
+            #[derive(Debug, PartialEq)]
+    pub enum PrimitiveTypeInfo {
+            $($variant,
+    )+
+        }
     };
 }
 impl_reflect_for_primitives!(
@@ -116,16 +131,27 @@ mod tests {
     }
 
     #[test]
-    fn set_value() {
+    fn assign() {
         let mut number = 42;
         let reflect_number = &mut number as &mut dyn Reflect;
-        reflect_number.set_value(99).unwrap();
+        reflect_number.assign(99).unwrap();
         assert_eq!(number, 99);
     }
     #[test]
-    fn set_value_wrong_type() {
+    fn assign_wrong_type() {
         let mut number = 42;
         let reflect_number = &mut number as &mut dyn Reflect;
-        reflect_number.set_value("foo").unwrap_err();
+        reflect_number.assign("foo").unwrap_err();
+    }
+
+    #[test]
+    fn set_value() {
+        let mut number = 42;
+        let reflect_number = &mut number as &mut dyn Reflect;
+
+        reflect_number
+            .set_value(Value::Primitive(PrimitiveValue::I32(99)))
+            .unwrap();
+        assert_eq!(number, 99i32);
     }
 }
