@@ -5,15 +5,59 @@ pub struct UndoLogic<ACTION> {
     undo_stack: Vec<UndoStackEntry<ACTION>>,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum DoOrUndo<ACTION> {
+    Do(ACTION),
+    Undo(ACTION),
+}
+
+pub type ActionVec<'a, ACTION> = Vec<DoOrUndo<&'a ACTION>>;
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct UndoInfo<'a, ACTION> {
+    pub actions: ActionVec<'a, ACTION>,
+}
+
+impl<'a, ACTION> UndoInfo<'a, ACTION> {
+    pub fn new() -> Self {
+        Self { actions: vec![] }
+    }
+
+    pub fn new_do(action: &'a ACTION) -> Self {
+        Self {
+            actions: vec![DoOrUndo::Do(action)],
+        }
+    }
+
+    pub fn new_undo(action: &'a ACTION) -> Self {
+        Self {
+            actions: vec![DoOrUndo::Undo(action)],
+        }
+    }
+
+    pub(crate) fn push_do(&mut self, action: &'a ACTION) {
+        self.actions.push(DoOrUndo::Do(action));
+    }
+    pub(crate) fn push_undo(&mut self, action: &'a ACTION) {
+        self.actions.push(DoOrUndo::Undo(action));
+    }
+}
+
 enum UndoStackEntry<ACTION> {
     Action { label: String, action: ACTION },
-    Undos { how_many: u32 },
+    Undos { how_many: usize },
 }
 
 impl<ACTION> UndoStackEntry<ACTION> {
     pub fn label(&self) -> Option<&str> {
         match self {
             UndoStackEntry::Action { label, .. } => Some(label),
+            _ => None,
+        }
+    }
+    pub fn action(&self) -> Option<&ACTION> {
+        match self {
+            UndoStackEntry::Action { action, .. } => Some(action),
             _ => None,
         }
     }
@@ -33,21 +77,88 @@ impl<ACTION> UndoLogic<ACTION> {
         })
     }
 
-    pub fn undo(&mut self) -> Option<&ACTION> {
-        let index = match self.undo_stack.last() {
-            Some(UndoStackEntry::Action { action, .. }) => Some(self.undo_stack.len() - 1),
+    pub fn undo(&mut self) -> UndoInfo<ACTION> {
+        let mut result = UndoInfo::new();
+        let stack_len = self.undo_stack.len();
+        let offset = match self.undo_stack.last_mut() {
+            Some(UndoStackEntry::Action { .. }) => Some(1),
+            Some(UndoStackEntry::Undos { how_many }) => {
+                if *how_many + 1 >= stack_len {
+                    // no more undos
+                    return result;
+                }
+                *how_many += 1;
+                Some(*how_many as usize)
+            }
             _ => None,
         };
-
-        self.undo_stack.push(UndoStackEntry::Undos { how_many: 1 });
-        if let Some(index) = index {
-            self.undo_stack.get(index).and_then(|entry| match entry {
-                UndoStackEntry::Action { action, .. } => Some(action),
-                _ => None,
-            })
-        } else {
-            None
+        if Some(1) == offset {
+            self.undo_stack.push(UndoStackEntry::Undos { how_many: 1 });
         }
+        if let Some(offset) = offset {
+            if offset >= self.undo_stack.len() {
+                return result;
+            }
+            let position = self.undo_stack.len() - 1 - offset;
+            let entry = self.undo_stack.get(position);
+            match entry {
+                Some(UndoStackEntry::Action { action, .. }) => {
+                    result.push_undo(action);
+                }
+                Some(UndoStackEntry::Undos { how_many }) => {
+                    let actions = self.get_previous_actions(position, *how_many);
+                    for action in actions {
+                        result.push_do(action);
+                    }
+                }
+                None => {}
+            }
+        }
+        result
+    }
+
+    fn get_previous_actions(&self, position: usize, how_many: usize) -> Vec<&ACTION> {
+        let mut result = vec![];
+        for index in position - how_many..position {
+            result.push(self.undo_stack[index].action().unwrap());
+        }
+        result
+    }
+
+    pub fn redo(&mut self) -> UndoInfo<ACTION> {
+        let mut result = UndoInfo::new();
+        let offset = match self.undo_stack.last_mut() {
+            Some(UndoStackEntry::Action { .. }) => None,
+            Some(UndoStackEntry::Undos { how_many }) => {
+                *how_many -= 1;
+                Some(*how_many)
+            }
+            _ => None,
+        };
+        let undo_stack_len = self.undo_stack.len();
+        if let Some(offset) = offset {
+            if offset == 0 {
+                self.undo_stack.pop();
+            }
+            if offset >= undo_stack_len {
+                return result;
+            }
+            let position = undo_stack_len - 2 - offset;
+            let entry = self.undo_stack.get(position);
+            match entry {
+                Some(UndoStackEntry::Action { action, .. }) => {
+                    result.push_do(action);
+                }
+                Some(UndoStackEntry::Undos { how_many }) => {
+                    let actions = self.get_previous_actions(position, *how_many);
+                    for action in actions.iter().rev() {
+                        result.push_undo(action);
+                    }
+                }
+                None => {}
+            }
+        }
+        result
     }
 
     pub fn get_undo_label(&self) -> Option<&str> {
@@ -67,6 +178,10 @@ impl<ACTION> UndoLogic<ACTION> {
             _ => None,
         }
     }
+
+    pub(crate) fn get_undo_stack(&self) -> &[UndoStackEntry<ACTION>] {
+        &self.undo_stack
+    }
 }
 
 #[cfg(test)]
@@ -76,23 +191,138 @@ mod tests {
     #[derive(Debug, PartialEq)]
     struct Increment(i32);
 
+    fn get_stack_string(undo: &UndoLogic<Increment>) -> String {
+        let mut result = String::new();
+        for entry in undo.get_undo_stack() {
+            match entry {
+                UndoStackEntry::Action {
+                    action: Increment(i),
+                    ..
+                } => {
+                    result += &format!("i{i} ");
+                }
+                UndoStackEntry::Undos { how_many } => {
+                    result += &format!("u{how_many} ");
+                }
+            }
+        }
+        result
+    }
+
     #[test]
     fn new() {
-        let undo = UndoLogic::<()>::new();
+        let mut undo = UndoLogic::<Increment>::new();
         assert_eq!(undo.get_undo_label(), None);
         assert_eq!(undo.get_redo_label(), None);
+        assert_eq!(get_stack_string(&undo), "");
+        let undo_info = undo.undo();
+        assert_eq!(undo_info, UndoInfo::new());
     }
 
     #[test]
     fn simple_undo() {
         let mut undo = UndoLogic::<Increment>::new();
         undo.push_action("test", Increment(1));
+        assert_eq!(get_stack_string(&undo), "i1 ");
         assert_eq!(undo.get_undo_label(), Some("test"));
         assert_eq!(undo.get_redo_label(), None);
+
         let undo_info = undo.undo();
-        assert_eq!(undo_info, Some(&Increment(1)));
+        assert_eq!(undo_info, UndoInfo::new_undo(&Increment(1)));
 
         assert_eq!(undo.get_redo_label(), Some("test"));
         assert_eq!(undo.get_undo_label(), None);
+
+        assert_eq!(get_stack_string(&undo), "i1 u1 ");
+
+        assert_eq!(undo.undo(), UndoInfo::new());
+    }
+
+    #[test]
+    fn double_undo() {
+        let mut undo = UndoLogic::<Increment>::new();
+        undo.push_action("a", Increment(1));
+        undo.push_action("b", Increment(2));
+
+        let undo_info = undo.undo();
+        assert_eq!(undo_info, UndoInfo::new_undo(&Increment(2)));
+        assert_eq!(get_stack_string(&undo), "i1 i2 u1 ");
+
+        let undo_info = undo.undo();
+        assert_eq!(undo_info, UndoInfo::new_undo(&Increment(1)));
+        assert_eq!(get_stack_string(&undo), "i1 i2 u2 ");
+
+        assert_eq!(undo.undo(), UndoInfo::new());
+        assert_eq!(get_stack_string(&undo), "i1 i2 u2 ");
+
+        let undo_info = undo.redo();
+        assert_eq!(undo_info, UndoInfo::new_do(&Increment(1)));
+        assert_eq!(get_stack_string(&undo), "i1 i2 u1 ");
+
+        let undo_info = undo.redo();
+        assert_eq!(undo_info, UndoInfo::new_do(&Increment(2)));
+        assert_eq!(get_stack_string(&undo), "i1 i2 ");
+
+        assert_eq!(undo.redo(), UndoInfo::new());
+    }
+
+    #[test]
+    fn fork_and_redo() {
+        let mut undo = UndoLogic::<Increment>::new();
+        undo.push_action("a", Increment(1));
+        undo.push_action("b", Increment(2));
+
+        let _undo_info = undo.undo();
+        undo.push_action("c", Increment(3));
+
+        assert_eq!(get_stack_string(&undo), "i1 i2 u1 i3 ");
+    }
+
+    #[test]
+    fn undo_an_undo() {
+        let mut undo = UndoLogic::<Increment>::new();
+        undo.push_action("a", Increment(1));
+        undo.push_action("b", Increment(2));
+
+        let _undo_info = undo.undo();
+        undo.push_action("c", Increment(3));
+
+        assert_eq!(get_stack_string(&undo), "i1 i2 u1 i3 ");
+        let undo_info = undo.undo();
+        assert_eq!(undo_info, UndoInfo::new_undo(&Increment(3)));
+        assert_eq!(get_stack_string(&undo), "i1 i2 u1 i3 u1 ");
+
+        let undo_info = undo.undo();
+        assert_eq!(undo_info, UndoInfo::new_do(&Increment(2)));
+        assert_eq!(get_stack_string(&undo), "i1 i2 u1 i3 u2 ");
+    }
+
+    #[test]
+    fn undo_a_double_undo() {
+        let mut undo = UndoLogic::<Increment>::new();
+        undo.push_action("a", Increment(1));
+        undo.push_action("b", Increment(2));
+        undo.push_action("c", Increment(3));
+
+        let _undo_info = undo.undo();
+        let _undo_info = undo.undo();
+        undo.push_action("c", Increment(4));
+
+        assert_eq!(get_stack_string(&undo), "i1 i2 i3 u2 i4 ");
+        let undo_info = undo.undo();
+        assert_eq!(undo_info, UndoInfo::new_undo(&Increment(4)));
+        assert_eq!(get_stack_string(&undo), "i1 i2 i3 u2 i4 u1 ");
+
+        let undo_info = undo.undo();
+        let mut expected_undo_info = UndoInfo::new_do(&Increment(2));
+        expected_undo_info.push_do(&Increment(3));
+        assert_eq!(undo_info, expected_undo_info);
+        assert_eq!(get_stack_string(&undo), "i1 i2 i3 u2 i4 u2 ");
+
+        let undo_info = undo.redo();
+        let mut expected_undo_info = UndoInfo::new_undo(&Increment(3));
+        expected_undo_info.push_undo(&Increment(2));
+        assert_eq!(undo_info, expected_undo_info);
+        assert_eq!(get_stack_string(&undo), "i1 i2 i3 u2 i4 u1 ");
     }
 }
