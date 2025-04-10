@@ -1,17 +1,27 @@
+use std::fmt::Debug;
+
 /**
  * https://github.com/zaboople/klonk/blob/master/TheGURQ.md
 */
-pub struct UndoLogic<ACTION> {
+pub struct UndoLogic<ACTION: Debug> {
     undo_stack: Vec<UndoStackEntry<ACTION>>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum DoOrUndo<ACTION> {
-    Do(ACTION),
-    Undo(ACTION),
+pub enum DoOrUndo<'a, ACTION> {
+    Do(&'a ACTION),
+    Undo(&'a ACTION),
 }
 
-pub type ActionVec<'a, ACTION> = Vec<DoOrUndo<&'a ACTION>>;
+impl<'a, ACTION> DoOrUndo<'a, ACTION> {
+    fn invert(&mut self) {
+        *self = match *self {
+            DoOrUndo::Do(action) => DoOrUndo::Undo(action),
+            DoOrUndo::Undo(action) => DoOrUndo::Do(action),
+        }
+    }
+}
+pub type ActionVec<'a, ACTION> = Vec<DoOrUndo<'a, ACTION>>;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct UndoInfo<'a, ACTION> {
@@ -41,8 +51,18 @@ impl<'a, ACTION> UndoInfo<'a, ACTION> {
     pub(crate) fn push_undo(&mut self, action: &'a ACTION) {
         self.actions.push(DoOrUndo::Undo(action));
     }
+
+    pub(crate) fn invert(&mut self) {
+        self.actions.reverse();
+        self.actions
+            .iter_mut()
+            .for_each(|do_or_undo: &mut DoOrUndo<ACTION>| {
+                do_or_undo.invert();
+            });
+    }
 }
 
+#[derive(Debug)]
 enum UndoStackEntry<ACTION> {
     Action { label: String, action: ACTION },
     Undos { how_many: usize },
@@ -63,7 +83,7 @@ impl<ACTION> UndoStackEntry<ACTION> {
     }
 }
 
-impl<ACTION> UndoLogic<ACTION> {
+impl<ACTION: Debug> UndoLogic<ACTION> {
     pub fn new() -> Self {
         Self {
             undo_stack: Vec::new(),
@@ -106,15 +126,42 @@ impl<ACTION> UndoLogic<ACTION> {
                     result.push_undo(action);
                 }
                 Some(UndoStackEntry::Undos { how_many }) => {
-                    let actions = self.get_previous_actions(position, *how_many);
-                    for action in actions {
-                        result.push_do(action);
-                    }
+                    self.collect_actions(position, *how_many, &mut result);
+                    result.invert();
                 }
                 None => {}
             }
         }
         result
+    }
+
+    fn collect_actions<'a, 'b: 'a>(
+        &'b self,
+        position: usize,
+        mut how_many: usize,
+        undo_info: &'a mut UndoInfo<'b, ACTION>,
+    ) {
+        let mut index = position - 1;
+        loop {
+            if how_many == 0 {
+                break;
+            }
+            how_many -= 1;
+            let entry = &self.undo_stack[index];
+            match entry {
+                UndoStackEntry::Action { action, .. } => {
+                    index -= 1;
+                    undo_info.push_undo(action);
+                }
+                UndoStackEntry::Undos { how_many } => {
+                    let mut sub_result = UndoInfo::new();
+                    self.collect_actions(index, *how_many, &mut sub_result);
+                    sub_result.invert();
+                    index -= sub_result.actions.len() + 1;
+                    undo_info.actions.append(&mut sub_result.actions);
+                }
+            }
+        }
     }
 
     fn get_previous_actions(&self, position: usize, how_many: usize) -> Vec<&ACTION> {
@@ -150,10 +197,7 @@ impl<ACTION> UndoLogic<ACTION> {
                     result.push_do(action);
                 }
                 Some(UndoStackEntry::Undos { how_many }) => {
-                    let actions = self.get_previous_actions(position, *how_many);
-                    for action in actions.iter().rev() {
-                        result.push_undo(action);
-                    }
+                    self.collect_actions(position, *how_many, &mut result);
                 }
                 None => {}
             }
@@ -168,7 +212,6 @@ impl<ACTION> UndoLogic<ACTION> {
         }
     }
     pub fn get_redo_label(&self) -> Option<&str> {
-        dbg!(self.undo_stack.last().and_then(|e| e.label()));
         match self.undo_stack.last() {
             Some(UndoStackEntry::Action { .. }) => None,
             Some(UndoStackEntry::Undos { how_many }) => self
@@ -324,5 +367,35 @@ mod tests {
         expected_undo_info.push_undo(&Increment(2));
         assert_eq!(undo_info, expected_undo_info);
         assert_eq!(get_stack_string(&undo), "i1 i2 i3 u2 i4 u1 ");
+    }
+
+    #[test]
+    fn triple_undo() {
+        let mut undo = UndoLogic::<Increment>::new();
+        undo.push_action("a", Increment(1));
+        undo.push_action("b", Increment(2));
+        undo.push_action("c", Increment(3));
+
+        let _undo_info = undo.undo();
+        let _undo_info = undo.undo();
+        undo.push_action("c", Increment(4));
+
+        let _undo_info = undo.undo();
+        let _undo_info = undo.undo();
+
+        assert_eq!(get_stack_string(&undo), "i1 i2 i3 u2 i4 u2 ");
+        undo.push_action("c", Increment(5));
+        assert_eq!(get_stack_string(&undo), "i1 i2 i3 u2 i4 u2 i5 ");
+
+        let undo_info = undo.undo();
+        assert_eq!(undo_info, UndoInfo::new_undo(&Increment(5)));
+        assert_eq!(get_stack_string(&undo), "i1 i2 i3 u2 i4 u2 i5 u1 ");
+
+        let undo_info = undo.undo();
+        let mut expected_undo_info = UndoInfo::new_undo(&Increment(3));
+        expected_undo_info.push_undo(&Increment(2));
+        expected_undo_info.push_do(&Increment(4));
+        assert_eq!(undo_info, expected_undo_info);
+        assert_eq!(get_stack_string(&undo), "i1 i2 i3 u2 i4 u2 i5 u2 ");
     }
 }
