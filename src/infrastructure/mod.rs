@@ -1,4 +1,5 @@
 pub mod binding_stack;
+mod facet;
 pub mod font_pool;
 pub mod image_pool;
 pub mod layout_context;
