@@ -1,5 +1,5 @@
-use crate::component::span::Span;
-use crate::component::value::ExpressionValue;
+use crate::ast::span::Span;
+use crate::ast::value::ExpressionValue;
 use std::ops::{Deref, DerefMut};
 use termtree::Tree;
 

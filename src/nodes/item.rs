@@ -1,5 +1,5 @@
 use crate::arenal::Idx;
-use crate::component::ast::ExpressionAst;
+use crate::ast::nodes::ExpressionAst;
 use crate::nodes::data::NodeIdx;
 
 #[derive(Clone)]

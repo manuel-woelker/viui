@@ -1,9 +1,9 @@
 use crate::arenal::Arenal;
+use crate::ast::eval::eval;
+use crate::ast::nodes::{ComponentAst, ExpressionAst, ItemAst, ItemDefinition};
+use crate::ast::parser::parse_ui;
+use crate::ast::value::ExpressionValue;
 use crate::bail;
-use crate::component::ast::{ComponentAst, ExpressionAst, ItemAst, ItemDefinition};
-use crate::component::eval::eval;
-use crate::component::parser::parse_ui;
-use crate::component::value::ExpressionValue;
 use crate::infrastructure::binding_stack::BindingStack;
 use crate::infrastructure::font_pool::FontPool;
 use crate::infrastructure::image_pool::ImagePool;

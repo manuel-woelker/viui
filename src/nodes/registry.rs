@@ -1,4 +1,4 @@
-use crate::component::ast::ItemAst;
+use crate::ast::nodes::ItemAst;
 use crate::err;
 use crate::infrastructure::layout_context::LayoutContext;
 use crate::nodes::data::NodeData;

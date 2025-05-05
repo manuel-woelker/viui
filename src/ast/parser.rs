@@ -1,12 +1,12 @@
-use crate::bail;
-use crate::component::ast::{
+use crate::ast::lexer::{lex, Token, TokenKind};
+use crate::ast::nodes::{
     ComponentAst, ComponentDefinition, ExpressionAst, ExpressionKind, ForItemDefinition,
     IfItemDefinition, ItemAst, ItemDefinition, NodeAst, NodeDefinition, PropAst, PropDefinition,
     UIAst, UIDefinition,
 };
-use crate::component::lexer::{lex, Token, TokenKind};
-use crate::component::span::Span;
-use crate::component::value::ExpressionValue;
+use crate::ast::span::Span;
+use crate::ast::value::ExpressionValue;
+use crate::bail;
 use crate::result::ViuiResult;
 
 pub fn parse_expression(expression_string: &str) -> ViuiResult<ExpressionAst> {
@@ -348,7 +348,7 @@ impl<'a> Parser<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::component::ast::{print_expression_ast, print_ui_ast};
+    use crate::ast::nodes::{print_expression_ast, print_ui_ast};
     use assertables::assert_contains;
     use expect_test::{expect, Expect};
 

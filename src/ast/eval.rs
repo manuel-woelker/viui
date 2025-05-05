@@ -1,6 +1,6 @@
+use crate::ast::nodes::{ExpressionAst, ExpressionKind};
+use crate::ast::value::ExpressionValue;
 use crate::bail;
-use crate::component::ast::{ExpressionAst, ExpressionKind};
-use crate::component::value::ExpressionValue;
 use crate::result::ViuiResult;
 use std::ops::Deref;
 
@@ -50,8 +50,8 @@ impl<'a> Evaluator<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ast::parser::parse_expression;
     use crate::bail;
-    use crate::component::parser::parse_expression;
     #[test]
     fn test_eval() {
         fn var_lookup(name: &str) -> ViuiResult<ExpressionValue> {

@@ -1,5 +1,5 @@
+use crate::ast::span::Span;
 use crate::bail;
-use crate::component::span::Span;
 use crate::result::ViuiResult;
 use phf::phf_map;
 use unscanny::Scanner;

@@ -1,5 +1,5 @@
 use crate::arenal::Idx;
-use crate::component::ast::ExpressionAst;
+use crate::ast::nodes::ExpressionAst;
 use crate::err;
 use crate::nodes::item::ItemIdx;
 use crate::nodes::types::{PropsBox, StateBox};
