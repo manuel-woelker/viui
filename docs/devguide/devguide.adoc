@@ -82,5 +82,10 @@ Preliminary outline - work in progress:
 
 == X. Appendices
 
-* Additional resources and references
-* Glossary of terms and definitions
+[glossary]
+=== Glossary
+
+[glossary]
+Node:: a part of the UI tree
+Element:: a leaf node of the UI tree
+Component:: a composite node of the UI tree
