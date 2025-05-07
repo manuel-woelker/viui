@@ -5,7 +5,7 @@ use crate::result::ViuiResult;
 #[derive(Debug)]
 pub struct IrComponent {
     pub name: String,
-    pub node: IrNode,
+    pub root: IrNode,
 }
 
 #[derive(Debug)]
@@ -13,6 +13,11 @@ pub struct IrNode {
     kind: NodeKind,
 }
 
+impl IrNode {
+    pub fn kind(&self) -> &NodeKind {
+        &self.kind
+    }
+}
 #[derive(Debug)]
 pub enum NodeKind {
     Block(BlockNode),
@@ -77,7 +82,7 @@ pub fn ast_to_ir(ui_ast: &UIAst) -> ViuiResult<Vec<IrComponent>> {
 fn ast_component_to_ir(component: &ComponentAst) -> ViuiResult<IrComponent> {
     Ok(IrComponent {
         name: component.name.clone(),
-        node: IrNode {
+        root: IrNode {
             kind: NodeKind::Block(BlockNode {
                 children: component
                     .children

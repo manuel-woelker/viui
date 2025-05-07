@@ -1,5 +1,6 @@
 pub mod arenal;
 pub mod ast;
+pub mod eval;
 pub mod infrastructure;
 pub mod ir;
 pub mod logging;
