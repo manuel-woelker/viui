@@ -54,3 +54,5 @@ pub enum RenderCommand {
         image_id: ImageId,
     },
 }
+
+pub type RenderCommands = Vec<RenderCommand>;

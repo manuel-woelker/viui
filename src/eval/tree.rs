@@ -9,6 +9,18 @@ pub struct EvalNode {
     props: Vec<EvalProp>,
 }
 
+impl EvalNode {
+    pub fn tag(&self) -> &str {
+        &self.tag
+    }
+    pub fn children(&self) -> &[EvalNode] {
+        &self.children
+    }
+    pub fn props(&self) -> &[EvalProp] {
+        &self.props
+    }
+}
+
 #[derive(Debug)]
 pub struct EvalProp {
     pub name: String,
