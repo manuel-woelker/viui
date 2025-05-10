@@ -1,17 +1,21 @@
 use crate::ast::parser::parse_ui;
 use crate::eval::tree::{eval_component, EvalNode};
-use crate::infrastructure::font_pool::FontPool;
+use crate::infrastructure::font_pool::{FontIndex, FontPool};
 use crate::infrastructure::image_pool::ImagePool;
 use crate::ir::node::ast_to_ir;
 use crate::nodes::events::UiEvent;
 use crate::render::backend::RenderBackendParameters;
 use crate::render::command::{RenderCommand, RenderCommands};
 use crate::render::context::RenderContext;
+use crate::resource::Resource;
 use crate::result::ViuiResult;
 use crate::types::{Color, Point, Rect, Size};
 use crate::ui::RenderBackendMessage;
-use crossbeam_channel::{Receiver, Sender};
+use crossbeam_channel::{select, tick, Receiver, Sender};
 use std::mem::take;
+use std::thread;
+use std::time::Duration;
+use tracing::{debug, error};
 
 struct RenderBackend {
     render_backend_sender: Sender<RenderBackendMessage>,
@@ -28,51 +32,54 @@ pub struct UIEngine {
 }
 
 impl UIEngine {
-    pub fn new() -> UIEngine {
+    pub fn new() -> ViuiResult<UIEngine> {
+        let mut font_pool = FontPool::default();
+        font_pool.load_font(Resource::from_path("assets/fonts/OpenSans-Regular.ttf"))?;
+
         let (ui_event_sender, ui_event_receiver) = crossbeam_channel::bounded::<UiEvent>(4);
-        UIEngine {
+        Ok(UIEngine {
             image_pool: ImagePool::default(),
-            font_pool: FontPool::default(),
+            font_pool,
             render_backends: Vec::new(),
             ui_event_receiver,
             ui_event_sender,
-        }
+        })
     }
-    /*
-        pub fn start(mut self) -> ViuiResult<()> {
-            thread::Builder::new()
-                .name("VIUI Thread".into())
-                .spawn(move || {
-                    debug!("Running main loop");
-                    let ticker = tick(Duration::from_micros(1_000_000 / 60));
-                    loop {
-                        let result: ViuiResult<()> = (|| {
-                            select! {
-                                recv(self.file_change_receiver) -> _event => {
-                                    self.load_root_node_file()?;
-                                    self.eval_layout_and_redraw()?;
-                                }
-                                recv(self.ui_event_receiver) -> event => {
-                                    self.handle_ui_event(event?)?;
-                                    self.eval_layout_and_redraw()?;
-                                }
-                                recv(ticker) -> _ => {
-                                    if !self.animated_nodes.is_empty() {
-                                        self.redraw()?;
-                                    }
-                                }
+
+    pub fn start(mut self) -> ViuiResult<()> {
+        thread::Builder::new()
+            .name("VIUI Thread".into())
+            .spawn(move || {
+                debug!("Running main loop");
+                let ticker = tick(Duration::from_micros(1_000_000 / 60));
+                loop {
+                    let result: ViuiResult<()> = (|| {
+                        select! {
+                            recv(self.ui_event_receiver) -> event => {
+                                self.handle_ui_event(event?)?;
+                                self.eval_layout_and_redraw()?;
                             }
-                            Ok(())
-                        })();
-                        if let Err(err) = result {
-                            error!("Error in VIUI Thread: {:?}", err);
-                            std::process::exit(1);
+                            /*
+                            recv(self.file_change_receiver) -> _event => {
+                                self.load_root_node_file()?;
+                                self.eval_layout_and_redraw()?;
+                            }
+                            recv(ticker) -> _ => {
+                                if !self.animated_nodes.is_empty() {
+                                    self.redraw()?;
+                                }
+                            }*/
                         }
+                        Ok(())
+                    })();
+                    if let Err(err) = result {
+                        error!("Error in VIUI Thread: {:?}", err);
+                        std::process::exit(1);
                     }
-                })?;
-            Ok(())
-        }
-    */
+                }
+            })?;
+        Ok(())
+    }
     pub fn add_render_backend(&mut self) -> ViuiResult<RenderBackendParameters> {
         let (render_backend_sender, message_receiver) =
             crossbeam_channel::bounded::<RenderBackendMessage>(4);
@@ -102,13 +109,27 @@ impl UIEngine {
         let evaled = eval_component(&ir[0])?;
         let mut render_backends = take(&mut self.render_backends);
         for backend in &mut render_backends {
-            let render_commands = self.render_commands(&evaled)?;
-            println!("Rendering {} commands", render_commands.len());
+            let mut render_commands = vec![];
+            let maximum_font_index = self.font_pool.maximum_font_index();
+            if maximum_font_index > backend.maximum_font_index_loaded {
+                for (font_index, font) in self
+                    .font_pool
+                    .get_fonts_from(backend.maximum_font_index_loaded)
+                {
+                    println!("LOAD FONT {}", font_index.index());
+                    render_commands.push(RenderCommand::LoadFont {
+                        font_idx: font_index,
+                        resource: font.resource().clone(),
+                    });
+                }
+                backend.maximum_font_index_loaded = maximum_font_index;
+            }
+
+            render_commands.extend_from_slice(&self.render_commands(&evaled)?);
             backend
                 .render_backend_sender
                 .send(RenderBackendMessage { render_commands })
                 .unwrap();
-            println!("Rendered");
         }
         self.render_backends = render_backends;
         Ok(())
@@ -134,6 +155,17 @@ impl UIEngine {
             ),
             radius: 5.0,
         });
+        render_context.add_command(RenderCommand::SetFont {
+            font_idx: FontIndex::new(0),
+        });
+        render_context.add_command(RenderCommand::SetStrokeColor(Color::gray(127)));
+        render_context.add_command(RenderCommand::SetFillColor(Color::gray(200)));
+        render_context.add_command(RenderCommand::Translate { x: 25.0, y: 22.0 });
+        render_context.add_command(RenderCommand::DrawText("Hello World".into()));
         Ok(render_context.render_queue())
+    }
+
+    fn handle_ui_event(&self, ui_event: UiEvent) -> ViuiResult<()> {
+        Ok(())
     }
 }

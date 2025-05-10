@@ -2,6 +2,7 @@ use crate::infrastructure::font_pool::FontIndex;
 use crate::nodes::events::{KeyboardKey, MouseEventKind, UiEvent};
 use crate::render::backend::RenderBackendParameters;
 use crate::render::command::{ImageId, RenderCommand};
+use crate::result::ViuiResult;
 use crate::types::{Color, Float, Point, Size};
 use crate::ui::RenderBackendMessage;
 use femtovg::renderer::OpenGl;
@@ -142,11 +143,11 @@ impl FemtovgRenderBackend {
                     _ => {}
                 },
                 Event::RedrawRequested(_) => {
-                    render(&mut render_state, &render_list);
+                    render(&mut render_state, &render_list).unwrap();
                 }
                 Event::UserEvent(message) => {
                     render_list = message.render_commands;
-                    render(&mut render_state, &render_list);
+                    render(&mut render_state, &render_list).unwrap();
                     //window.request_redraw();
                 }
                 _ => {}
@@ -221,7 +222,7 @@ fn create_window(
     )
 }
 
-fn render(render_state: &mut RenderState, render_commands: &[RenderCommand]) {
+fn render(render_state: &mut RenderState, render_commands: &[RenderCommand]) -> ViuiResult<()> {
     let RenderState {
         window: _window,
         canvas,
@@ -276,7 +277,7 @@ fn render(render_state: &mut RenderState, render_commands: &[RenderCommand]) {
                 stroke_paint.set_line_width(1.0);
                 stroke_paint.set_anti_alias(true);
                 stroke_paint.set_text_baseline(Baseline::Bottom);
-                canvas.fill_text(0.0, 10.0, text, &stroke_paint).unwrap();
+                canvas.fill_text(0.0, 10.0, text, &stroke_paint)?;
             }
             RenderCommand::Save => {
                 canvas.save();
@@ -365,6 +366,7 @@ fn render(render_state: &mut RenderState, render_commands: &[RenderCommand]) {
     surface
         .swap_buffers(context)
         .expect("Could not swap buffers");
+    Ok(())
 }
 
 impl From<&Color> for femtovg::Color {

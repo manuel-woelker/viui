@@ -18,9 +18,9 @@ fn main_internal() -> ViuiResult<()> {
     init_logging()?;
     info!("VIUI Sandbox starting");
 
-    let mut ui = UIEngine::new();
+    let mut ui = UIEngine::new()?;
     let render_backend = FemtovgRenderBackend::new(ui.add_render_backend()?);
-    //    ui.start()?;
+    ui.start()?;
     info!("VIUI Sandbox started");
     render_backend.start();
 }

@@ -146,6 +146,13 @@ impl From<&SpannedError> for ViuiErrorKind {
     }
 }
 
+impl From<&femtovg::ErrorKind> for ViuiErrorKind {
+    #[track_caller]
+    fn from(error: &femtovg::ErrorKind) -> Self {
+        Self::General(format!("FemtoVG Error: {:?}", error))
+    }
+}
+
 impl From<&str> for ViuiError {
     #[track_caller]
     fn from(error: &str) -> Self {
