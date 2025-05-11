@@ -110,13 +110,14 @@ impl UIEngine {
         let mut render_backends = take(&mut self.render_backends);
         for backend in &mut render_backends {
             let mut render_commands = vec![];
+
+            let tree_render_commands = self.render_commands(&evaled)?;
             let maximum_font_index = self.font_pool.maximum_font_index();
             if maximum_font_index > backend.maximum_font_index_loaded {
                 for (font_index, font) in self
                     .font_pool
                     .get_fonts_from(backend.maximum_font_index_loaded)
                 {
-                    println!("LOAD FONT {}", font_index.index());
                     render_commands.push(RenderCommand::LoadFont {
                         font_idx: font_index,
                         resource: font.resource().clone(),
@@ -124,8 +125,10 @@ impl UIEngine {
                 }
                 backend.maximum_font_index_loaded = maximum_font_index;
             }
-
-            render_commands.extend_from_slice(&self.render_commands(&evaled)?);
+            render_commands.push(RenderCommand::SetFont {
+                font_idx: FontIndex::new(0),
+            });
+            render_commands.extend_from_slice(&tree_render_commands);
             backend
                 .render_backend_sender
                 .send(RenderBackendMessage { render_commands })
@@ -154,9 +157,6 @@ impl UIEngine {
                 Size::new(200.0 - stroke_width * 2.0, 40.0 - stroke_width * 2.0),
             ),
             radius: 5.0,
-        });
-        render_context.add_command(RenderCommand::SetFont {
-            font_idx: FontIndex::new(0),
         });
         render_context.add_command(RenderCommand::SetStrokeColor(Color::gray(127)));
         render_context.add_command(RenderCommand::SetFillColor(Color::gray(200)));
