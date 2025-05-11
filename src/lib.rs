@@ -16,3 +16,4 @@ pub mod test;
 pub mod test_reflect;
 pub mod types;
 pub mod ui;
+pub mod widget;

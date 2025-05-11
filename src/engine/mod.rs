@@ -11,6 +11,8 @@ use crate::resource::Resource;
 use crate::result::ViuiResult;
 use crate::types::{Color, Point, Rect, Size};
 use crate::ui::RenderBackendMessage;
+use crate::widget::label::LabelWidget;
+use crate::widget::Widget;
 use crossbeam_channel::{select, tick, Receiver, Sender};
 use std::mem::take;
 use std::thread;
@@ -144,24 +146,7 @@ impl UIEngine {
         render_context.add_command(RenderCommand::SetFillColor(Color::gray(10)));
         let size = Size::new(1200.0, 1200.0);
         render_context.add_command(RenderCommand::SetWindowSize { size: size.clone() });
-        render_context.add_command(RenderCommand::FillRect {
-            rect: Rect::new(Point::new(0.0, 0.0), size),
-        });
-
-        render_context.add_command(RenderCommand::SetStrokeColor(Color::gray(127)));
-        let stroke_width = 2.0f32;
-        render_context.add_command(RenderCommand::SetStrokeWidth(stroke_width));
-        render_context.add_command(RenderCommand::FillRoundRect {
-            rect: Rect::new(
-                Point::new(stroke_width, stroke_width),
-                Size::new(200.0 - stroke_width * 2.0, 40.0 - stroke_width * 2.0),
-            ),
-            radius: 5.0,
-        });
-        render_context.add_command(RenderCommand::SetStrokeColor(Color::gray(127)));
-        render_context.add_command(RenderCommand::SetFillColor(Color::gray(200)));
-        render_context.add_command(RenderCommand::Translate { x: 25.0, y: 22.0 });
-        render_context.add_command(RenderCommand::DrawText("Hello World".into()));
+        LabelWidget {}.render(&mut render_context)?;
         Ok(render_context.render_queue())
     }
 
