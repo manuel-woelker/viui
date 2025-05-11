@@ -2,7 +2,7 @@ use crate::ast::parser::parse_ui;
 use crate::eval::tree::{eval_component, EvalNode};
 use crate::infrastructure::font_pool::{FontIndex, FontPool};
 use crate::infrastructure::image_pool::ImagePool;
-use crate::ir::node::ast_to_ir;
+use crate::ir::node::{ast_to_ir, IrComponent};
 use crate::nodes::events::UiEvent;
 use crate::render::backend::RenderBackendParameters;
 use crate::render::command::{RenderCommand, RenderCommands};
@@ -31,15 +31,21 @@ pub struct UIEngine {
     render_backends: Vec<RenderBackend>,
     ui_event_receiver: Receiver<UiEvent>,
     ui_event_sender: Sender<UiEvent>,
+    ir: Vec<IrComponent>,
 }
 
 impl UIEngine {
     pub fn new() -> ViuiResult<UIEngine> {
+        let source = std::fs::read_to_string("examples/simple/label.viui-component").unwrap();
+        let ast = parse_ui(&source)?;
+        let ir = ast_to_ir(&ast)?;
+
         let mut font_pool = FontPool::default();
         font_pool.load_font(Resource::from_path("assets/fonts/OpenSans-Regular.ttf"))?;
 
         let (ui_event_sender, ui_event_receiver) = crossbeam_channel::bounded::<UiEvent>(4);
         Ok(UIEngine {
+            ir,
             image_pool: ImagePool::default(),
             font_pool,
             render_backends: Vec::new(),
@@ -105,52 +111,66 @@ impl UIEngine {
     }
 
     pub fn eval_layout_and_redraw(&mut self) -> ViuiResult<()> {
-        let source = std::fs::read_to_string("examples/simple/label.viui-component")?;
-        let ast = parse_ui(&source)?;
-        let ir = ast_to_ir(&ast)?;
-        let evaled = eval_component(&ir[0])?;
+        let evaled = eval_component(&self.ir[0])?;
         let mut render_backends = take(&mut self.render_backends);
         for backend in &mut render_backends {
-            let mut render_commands = vec![];
+            let mut render_list = vec![];
 
-            let tree_render_commands = self.render_commands(&evaled)?;
+            let mut render_context =
+                RenderContext::new(&mut self.image_pool, &mut self.font_pool, 0.0)?;
+            render_context.add_command(RenderCommand::SetFillColor(Color::gray(10)));
+            let size = Size::new(1200.0, 1200.0);
+            render_context.add_command(RenderCommand::SetWindowSize { size: size.clone() });
+
+            render_commands(&evaled, &mut render_context, &evaled)?;
+            let mut widget_render_list = render_context.render_queue();
             let maximum_font_index = self.font_pool.maximum_font_index();
             if maximum_font_index > backend.maximum_font_index_loaded {
                 for (font_index, font) in self
                     .font_pool
                     .get_fonts_from(backend.maximum_font_index_loaded)
                 {
-                    render_commands.push(RenderCommand::LoadFont {
+                    render_list.push(RenderCommand::LoadFont {
                         font_idx: font_index,
                         resource: font.resource().clone(),
                     });
                 }
                 backend.maximum_font_index_loaded = maximum_font_index;
             }
-            render_commands.push(RenderCommand::SetFont {
+            render_list.push(RenderCommand::SetFont {
                 font_idx: FontIndex::new(0),
             });
-            render_commands.extend_from_slice(&tree_render_commands);
+
+            render_list.append(&mut widget_render_list);
             backend
                 .render_backend_sender
-                .send(RenderBackendMessage { render_commands })
+                .send(RenderBackendMessage {
+                    render_commands: render_list,
+                })
                 .unwrap();
         }
         self.render_backends = render_backends;
         Ok(())
     }
 
-    pub fn render_commands(&mut self, evaled: &EvalNode) -> ViuiResult<RenderCommands> {
-        let mut render_context =
-            RenderContext::new(&mut self.image_pool, &mut self.font_pool, 0.0)?;
-        render_context.add_command(RenderCommand::SetFillColor(Color::gray(10)));
-        let size = Size::new(1200.0, 1200.0);
-        render_context.add_command(RenderCommand::SetWindowSize { size: size.clone() });
-        LabelWidget {}.render(&mut render_context)?;
-        Ok(render_context.render_queue())
-    }
-
     fn handle_ui_event(&self, ui_event: UiEvent) -> ViuiResult<()> {
         Ok(())
     }
+}
+
+pub fn render_commands(
+    evaled: &EvalNode,
+    render_context: &mut RenderContext,
+    eval_node: &EvalNode,
+) -> ViuiResult<()> {
+    match eval_node.tag() {
+        "label" => {
+            LabelWidget {}.render(render_context, evaled.props())?;
+        }
+        _ => {}
+    }
+    for child in evaled.children() {
+        render_commands(child, render_context, child)?
+    }
+    Ok(())
 }

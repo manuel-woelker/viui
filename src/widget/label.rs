@@ -1,3 +1,4 @@
+use crate::eval::tree::Properties;
 use crate::render::command::RenderCommand;
 use crate::render::context::RenderContext;
 use crate::result::ViuiResult;
@@ -7,7 +8,7 @@ use crate::widget::Widget;
 pub struct LabelWidget {}
 
 impl Widget for LabelWidget {
-    fn render(&self, render_context: &mut RenderContext) -> ViuiResult<()> {
+    fn render(&self, render_context: &mut RenderContext, props: &Properties) -> ViuiResult<()> {
         render_context.add_command(RenderCommand::SetStrokeColor(Color::gray(127)));
         let stroke_width = 2.0f32;
         render_context.add_command(RenderCommand::SetStrokeWidth(stroke_width));
@@ -21,7 +22,9 @@ impl Widget for LabelWidget {
         render_context.add_command(RenderCommand::SetStrokeColor(Color::gray(127)));
         render_context.add_command(RenderCommand::SetFillColor(Color::gray(200)));
         render_context.add_command(RenderCommand::Translate { x: 25.0, y: 22.0 });
-        render_context.add_command(RenderCommand::DrawText("Hello World".into()));
+        render_context.add_command(RenderCommand::DrawText(
+            props.get("text").unwrap().as_str().to_string(),
+        ));
         Ok(())
     }
 }

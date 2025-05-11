@@ -1,12 +1,14 @@
 use crate::ast::value::ExpressionValue;
 use crate::ir::node::{IrComponent, IrExpression, IrNode, NodeKind};
 use crate::result::ViuiResult;
+use std::collections::HashMap;
+use std::hash::{BuildHasher, Hash};
 
 #[derive(Debug)]
 pub struct EvalNode {
     tag: String,
     children: Vec<EvalNode>,
-    props: Vec<EvalProp>,
+    props: Properties,
 }
 
 impl EvalNode {
@@ -16,20 +18,47 @@ impl EvalNode {
     pub fn children(&self) -> &[EvalNode] {
         &self.children
     }
-    pub fn props(&self) -> &[EvalProp] {
+    pub fn props(&self) -> &Properties {
         &self.props
     }
 }
 
 #[derive(Debug)]
-pub struct EvalProp {
-    pub name: String,
-    pub value: EvalValue,
+pub struct Properties {
+    values: HashMap<String, EvalValue>,
+}
+
+impl Properties {
+    pub fn new() -> Self {
+        Self {
+            values: HashMap::new(),
+        }
+    }
+
+    pub fn get(&self, name: &str) -> Option<&EvalValue> {
+        self.values.get(name)
+    }
+}
+
+impl FromIterator<(String, EvalValue)> for Properties {
+    fn from_iter<T: IntoIterator<Item = (String, EvalValue)>>(iter: T) -> Self {
+        let mut map = HashMap::new();
+        map.extend(iter);
+        Self { values: map }
+    }
 }
 
 #[derive(Debug)]
 pub enum EvalValue {
     String(String),
+}
+
+impl EvalValue {
+    pub fn as_str(&self) -> &str {
+        match self {
+            EvalValue::String(value) => value,
+        }
+    }
 }
 
 impl From<String> for EvalValue {
@@ -68,7 +97,7 @@ fn eval_node(ir_node: &IrNode) -> ViuiResult<EvalNode> {
             Ok(EvalNode {
                 tag: "div".to_string(),
                 children,
-                props: vec![],
+                props: Properties::new(),
             })
         }
         NodeKind::Element(element) => Ok(EvalNode {
@@ -77,13 +106,8 @@ fn eval_node(ir_node: &IrNode) -> ViuiResult<EvalNode> {
             props: element
                 .props
                 .iter()
-                .map(|prop| {
-                    Ok(EvalProp {
-                        name: prop.name.clone(),
-                        value: eval_expression(&prop.expression)?,
-                    })
-                })
-                .collect::<ViuiResult<Vec<_>>>()?,
+                .map(|prop| Ok((prop.name.clone(), eval_expression(&prop.expression)?)))
+                .collect::<ViuiResult<_>>()?,
         }),
         _ => todo!(),
     }
