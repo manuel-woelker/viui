@@ -1,0 +1,4 @@
+component LabelComponent {
+	label(text="Hello")
+	label(text="World")
+}

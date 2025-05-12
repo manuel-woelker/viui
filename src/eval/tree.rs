@@ -1,5 +1,7 @@
+use crate::arenal::{Arenal, Idx};
 use crate::ast::value::ExpressionValue;
 use crate::ir::node::{IrComponent, IrExpression, IrNode, NodeKind};
+use crate::nodes::data::LayoutInfo;
 use crate::result::ViuiResult;
 use std::collections::HashMap;
 use std::hash::{BuildHasher, Hash};
@@ -7,21 +9,24 @@ use std::hash::{BuildHasher, Hash};
 #[derive(Debug)]
 pub struct EvalNode {
     tag: String,
-    children: Vec<EvalNode>,
+    children: Vec<EvalNodeIdx>,
     props: Properties,
+    pub layout: LayoutInfo,
 }
 
 impl EvalNode {
     pub fn tag(&self) -> &str {
         &self.tag
     }
-    pub fn children(&self) -> &[EvalNode] {
+    pub fn children(&self) -> &[EvalNodeIdx] {
         &self.children
     }
     pub fn props(&self) -> &Properties {
         &self.props
     }
 }
+
+pub type EvalNodeIdx = Idx<EvalNode>;
 
 #[derive(Debug)]
 pub struct Properties {
@@ -82,25 +87,29 @@ impl From<&ExpressionValue> for EvalValue {
     }
 }
 
-pub fn eval_component(ir_component: &IrComponent) -> ViuiResult<EvalNode> {
-    eval_node(&ir_component.root)
+pub fn eval_component(
+    ir_component: &IrComponent,
+    arenal: &mut Arenal<EvalNode>,
+) -> ViuiResult<EvalNodeIdx> {
+    eval_node(&ir_component.root, arenal)
 }
 
-fn eval_node(ir_node: &IrNode) -> ViuiResult<EvalNode> {
+fn eval_node(ir_node: &IrNode, arenal: &mut Arenal<EvalNode>) -> ViuiResult<EvalNodeIdx> {
     match ir_node.kind() {
         NodeKind::Block(block) => {
             let children = block
                 .children
                 .iter()
-                .map(eval_node)
-                .collect::<ViuiResult<Vec<EvalNode>>>()?;
-            Ok(EvalNode {
+                .map(|ir_child| eval_node(ir_child, arenal))
+                .collect::<ViuiResult<Vec<EvalNodeIdx>>>()?;
+            Ok(arenal.insert(EvalNode {
                 tag: "div".to_string(),
                 children,
                 props: Properties::new(),
-            })
+                layout: Default::default(),
+            }))
         }
-        NodeKind::Element(element) => Ok(EvalNode {
+        NodeKind::Element(element) => Ok(arenal.insert(EvalNode {
             tag: element.name.clone(),
             children: vec![],
             props: element
@@ -108,7 +117,8 @@ fn eval_node(ir_node: &IrNode) -> ViuiResult<EvalNode> {
                 .iter()
                 .map(|prop| Ok((prop.name.clone(), eval_expression(&prop.expression)?)))
                 .collect::<ViuiResult<_>>()?,
-        }),
+            layout: Default::default(),
+        })),
         _ => todo!(),
     }
 }

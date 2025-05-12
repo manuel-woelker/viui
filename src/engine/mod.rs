@@ -1,8 +1,11 @@
+use crate::arenal::Arenal;
 use crate::ast::parser::parse_ui;
-use crate::eval::tree::{eval_component, EvalNode};
+use crate::eval::tree::{eval_component, EvalNode, EvalNodeIdx};
 use crate::infrastructure::font_pool::{FontIndex, FontPool};
 use crate::infrastructure::image_pool::ImagePool;
 use crate::ir::node::{ast_to_ir, IrComponent};
+use crate::nodes::data::NodeIdx;
+use crate::nodes::elements::kind::LayoutConstraints;
 use crate::nodes::events::UiEvent;
 use crate::render::backend::RenderBackendParameters;
 use crate::render::command::{RenderCommand, RenderCommands};
@@ -17,6 +20,8 @@ use crossbeam_channel::{select, tick, Receiver, Sender};
 use std::mem::take;
 use std::thread;
 use std::time::Duration;
+use taffy::prelude::length;
+use taffy::{FlexDirection, NodeId, Style, TaffyTree};
 use tracing::{debug, error};
 
 struct RenderBackend {
@@ -32,11 +37,12 @@ pub struct UIEngine {
     ui_event_receiver: Receiver<UiEvent>,
     ui_event_sender: Sender<UiEvent>,
     ir: Vec<IrComponent>,
+    eval_node_arenal: Arenal<EvalNode>,
 }
 
 impl UIEngine {
     pub fn new() -> ViuiResult<UIEngine> {
-        let source = std::fs::read_to_string("examples/simple/label.viui-component").unwrap();
+        let source = std::fs::read_to_string("examples/simple/labels.viui-component").unwrap();
         let ast = parse_ui(&source)?;
         let ir = ast_to_ir(&ast)?;
 
@@ -51,6 +57,7 @@ impl UIEngine {
             render_backends: Vec::new(),
             ui_event_receiver,
             ui_event_sender,
+            eval_node_arenal: Arenal::new(),
         })
     }
 
@@ -111,9 +118,61 @@ impl UIEngine {
     }
 
     pub fn eval_layout_and_redraw(&mut self) -> ViuiResult<()> {
-        let evaled = eval_component(&self.ir[0])?;
+        self.eval_node_arenal.clear();
+        let evaled_idx = eval_component(&self.ir[0], &mut self.eval_node_arenal)?;
         let mut render_backends = take(&mut self.render_backends);
         for backend in &mut render_backends {
+            let mut tree: TaffyTree<EvalNodeIdx> = TaffyTree::new();
+            let root_layout_node = tree.new_leaf_with_context(
+                Style {
+                    flex_direction: FlexDirection::Column,
+                    size: taffy::Size {
+                        width: length(backend.window_size.width),
+                        height: length(backend.window_size.height),
+                    },
+                    ..Default::default()
+                },
+                evaled_idx,
+            )?;
+            let mut todo: Vec<(NodeId, EvalNodeIdx)> = vec![];
+            for child in self.eval_node_arenal[&evaled_idx].children() {
+                todo.push((root_layout_node, *child));
+            }
+            while let Some((parent_layout_id, node_idx)) = todo.pop() {
+                let node = &mut self.eval_node_arenal[&node_idx];
+                let style = Style {
+                    size: taffy::Size {
+                        width: length(10.0),
+                        height: length(100.0),
+                    },
+                    ..Default::default()
+                };
+                let layout_node = tree.new_leaf_with_context(style, node_idx)?;
+                tree.add_child(parent_layout_id, layout_node)?;
+                for child in node.children() {
+                    todo.push((layout_node, *child));
+                }
+            }
+            tree.compute_layout(root_layout_node, taffy::Size::max_content())?;
+            //dbg!(tree.layout(root_layout_node)?);
+
+            // Set absolute position and bounds for each node
+            let mut todo = vec![(0.0, 0.0, root_layout_node)];
+            while let Some((parent_x, parent_y, node_id)) = todo.pop() {
+                let node_index = tree.get_node_context(node_id).unwrap();
+                let node = &mut self.eval_node_arenal[node_index];
+                let layout = tree.layout(node_id)?;
+                let x = parent_x + layout.location.x;
+                let y = parent_y + layout.location.y;
+                node.layout.bounds = Rect::new(
+                    Point::new(x, y),
+                    Size::new(layout.size.width, layout.size.height),
+                );
+                for child in tree.children(node_id)? {
+                    todo.push((x, y, child));
+                }
+            }
+
             let mut render_list = vec![];
 
             let mut render_context =
@@ -122,7 +181,7 @@ impl UIEngine {
             let size = Size::new(1200.0, 1200.0);
             render_context.add_command(RenderCommand::SetWindowSize { size: size.clone() });
 
-            render_commands(&evaled, &mut render_context, &evaled)?;
+            render_commands(evaled_idx, &mut render_context, &self.eval_node_arenal)?;
             let mut widget_render_list = render_context.render_queue();
             let maximum_font_index = self.font_pool.maximum_font_index();
             if maximum_font_index > backend.maximum_font_index_loaded {
@@ -159,18 +218,26 @@ impl UIEngine {
 }
 
 pub fn render_commands(
-    evaled: &EvalNode,
+    node_idx: EvalNodeIdx,
     render_context: &mut RenderContext,
-    eval_node: &EvalNode,
+    eval_node_arenal: &Arenal<EvalNode>,
 ) -> ViuiResult<()> {
+    render_context.add_command(RenderCommand::Save);
+    let eval_node = &eval_node_arenal[&node_idx];
+    let translate = eval_node.layout.bounds.origin;
+    render_context.add_command(RenderCommand::Translate {
+        x: translate.x,
+        y: translate.y,
+    });
     match eval_node.tag() {
         "label" => {
-            LabelWidget {}.render(render_context, evaled.props())?;
+            LabelWidget {}.render(render_context, eval_node.props())?;
         }
         _ => {}
     }
-    for child in evaled.children() {
-        render_commands(child, render_context, child)?
+    for child in eval_node.children() {
+        render_commands(*child, render_context, eval_node_arenal)?
     }
+    render_context.add_command(RenderCommand::Restore);
     Ok(())
 }
