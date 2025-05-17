@@ -3,7 +3,7 @@ use crate::ast::parser::parse_ui;
 use crate::eval::tree::{eval_component, EvalNode, EvalNodeIdx};
 use crate::infrastructure::font_pool::{FontIndex, FontPool};
 use crate::infrastructure::image_pool::ImagePool;
-use crate::ir::node::{ast_to_ir, IrComponent};
+use crate::ir::node::{ast_to_ir, IrComponent, WidgetRegistry};
 use crate::nodes::data::NodeIdx;
 use crate::nodes::elements::kind::LayoutConstraints;
 use crate::nodes::events::UiEvent;
@@ -18,6 +18,7 @@ use crate::widget::label::LabelWidget;
 use crate::widget::Widget;
 use crossbeam_channel::{select, tick, Receiver, Sender};
 use std::mem::take;
+use std::ops::Index;
 use std::thread;
 use std::time::Duration;
 use taffy::prelude::length;
@@ -30,6 +31,12 @@ struct RenderBackend {
     window_size: Size,
 }
 
+pub struct UIEngineStarter {
+    render_backends: Vec<RenderBackend>,
+    ui_event_receiver: Receiver<UiEvent>,
+    ui_event_sender: Sender<UiEvent>,
+}
+
 pub struct UIEngine {
     image_pool: ImagePool,
     font_pool: FontPool,
@@ -38,26 +45,16 @@ pub struct UIEngine {
     ui_event_sender: Sender<UiEvent>,
     ir: Vec<IrComponent>,
     eval_node_arenal: Arenal<EvalNode>,
+    widget_registry: WidgetRegistry,
 }
 
-impl UIEngine {
-    pub fn new() -> ViuiResult<UIEngine> {
-        let source = std::fs::read_to_string("examples/simple/labels.viui-component").unwrap();
-        let ast = parse_ui(&source)?;
-        let ir = ast_to_ir(&ast)?;
-
-        let mut font_pool = FontPool::default();
-        font_pool.load_font(Resource::from_path("assets/fonts/OpenSans-Regular.ttf"))?;
-
+impl UIEngineStarter {
+    pub fn new() -> ViuiResult<Self> {
         let (ui_event_sender, ui_event_receiver) = crossbeam_channel::bounded::<UiEvent>(4);
-        Ok(UIEngine {
-            ir,
-            image_pool: ImagePool::default(),
-            font_pool,
+        Ok(UIEngineStarter {
             render_backends: Vec::new(),
             ui_event_receiver,
             ui_event_sender,
-            eval_node_arenal: Arenal::new(),
         })
     }
 
@@ -65,36 +62,20 @@ impl UIEngine {
         thread::Builder::new()
             .name("VIUI Thread".into())
             .spawn(move || {
-                debug!("Running main loop");
-                let ticker = tick(Duration::from_micros(1_000_000 / 60));
-                loop {
-                    let result: ViuiResult<()> = (|| {
-                        select! {
-                            recv(self.ui_event_receiver) -> event => {
-                                self.handle_ui_event(event?)?;
-                                self.eval_layout_and_redraw()?;
-                            }
-                            /*
-                            recv(self.file_change_receiver) -> _event => {
-                                self.load_root_node_file()?;
-                                self.eval_layout_and_redraw()?;
-                            }
-                            recv(ticker) -> _ => {
-                                if !self.animated_nodes.is_empty() {
-                                    self.redraw()?;
-                                }
-                            }*/
-                        }
-                        Ok(())
-                    })();
-                    if let Err(err) = result {
-                        error!("Error in VIUI Thread: {:?}", err);
-                        std::process::exit(1);
-                    }
+                let result: ViuiResult<()> = (|| {
+                    let ui = UIEngine::new(self)?;
+                    debug!("Running main loop");
+                    ui.run();
+                    Ok(())
+                })();
+                if let Err(err) = result {
+                    error!("Error in VIUI Thread: {:?}", err);
+                    std::process::exit(1);
                 }
             })?;
         Ok(())
     }
+
     pub fn add_render_backend(&mut self) -> ViuiResult<RenderBackendParameters> {
         let (render_backend_sender, message_receiver) =
             crossbeam_channel::bounded::<RenderBackendMessage>(4);
@@ -104,7 +85,6 @@ impl UIEngine {
             maximum_font_index_loaded: 0,
             window_size: Size::new(1200.0, 1200.0),
         });
-        self.eval_layout_and_redraw()?;
         Ok(RenderBackendParameters {
             message_receiver,
             event_sender: self.event_sender(),
@@ -115,6 +95,61 @@ impl UIEngine {
 
     pub fn event_sender(&self) -> Sender<UiEvent> {
         self.ui_event_sender.clone()
+    }
+}
+
+impl UIEngine {
+    pub fn new(starter: UIEngineStarter) -> ViuiResult<Self> {
+        let mut widget_registry = WidgetRegistry::default();
+
+        widget_registry.register_widget("label".to_string(), LabelWidget {});
+
+        let source = std::fs::read_to_string("examples/simple/labels.viui-component").unwrap();
+        let ast = parse_ui(&source)?;
+        let ir = ast_to_ir(&ast, &widget_registry)?;
+
+        let mut font_pool = FontPool::default();
+        font_pool.load_font(Resource::from_path("assets/fonts/OpenSans-Regular.ttf"))?;
+
+        Ok(UIEngine {
+            ir,
+            image_pool: ImagePool::default(),
+            font_pool,
+            render_backends: starter.render_backends,
+            ui_event_receiver: starter.ui_event_receiver,
+            ui_event_sender: starter.ui_event_sender,
+            eval_node_arenal: Arenal::new(),
+            widget_registry,
+        })
+    }
+
+    pub fn run(mut self) {
+        let ticker = tick(Duration::from_micros(1_000_000 / 60));
+        loop {
+            let result: ViuiResult<()> = (|| {
+                select! {
+                    recv(self.ui_event_receiver) -> event => {
+                        self.handle_ui_event(event?)?;
+                        self.eval_layout_and_redraw()?;
+                    }
+                    /*
+                    recv(self.file_change_receiver) -> _event => {
+                        self.load_root_node_file()?;
+                        self.eval_layout_and_redraw()?;
+                    }
+                    recv(ticker) -> _ => {
+                        if !self.animated_nodes.is_empty() {
+                            self.redraw()?;
+                        }
+                    }*/
+                }
+                Ok(())
+            })();
+            if let Err(err) = result {
+                error!("Error in VIUI Thread: {:?}", err);
+                std::process::exit(1);
+            }
+        }
     }
 
     pub fn eval_layout_and_redraw(&mut self) -> ViuiResult<()> {
@@ -135,7 +170,7 @@ impl UIEngine {
                 evaled_idx,
             )?;
             let mut todo: Vec<(NodeId, EvalNodeIdx)> = vec![];
-            for child in self.eval_node_arenal[&evaled_idx].children() {
+            for child in self.eval_node_arenal[&evaled_idx].children().iter().rev() {
                 todo.push((root_layout_node, *child));
             }
             while let Some((parent_layout_id, node_idx)) = todo.pop() {
@@ -229,12 +264,7 @@ pub fn render_commands(
         x: translate.x,
         y: translate.y,
     });
-    match eval_node.tag() {
-        "label" => {
-            LabelWidget {}.render(render_context, eval_node.props())?;
-        }
-        _ => {}
-    }
+    eval_node.widget.render(render_context, eval_node.props())?;
     for child in eval_node.children() {
         render_commands(*child, render_context, eval_node_arenal)?
     }

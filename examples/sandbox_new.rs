@@ -1,7 +1,7 @@
 use bevy_reflect::{ParsedPath, Reflect};
 use log::{error, info};
 use serde::{Deserialize, Serialize};
-use viui::engine::UIEngine;
+use viui::engine::{UIEngine, UIEngineStarter};
 use viui::logging::init_logging;
 use viui::observable_state::{ObservableState, TypedPath};
 use viui::render::backend_femtovg::FemtovgRenderBackend;
@@ -18,7 +18,7 @@ fn main_internal() -> ViuiResult<()> {
     init_logging()?;
     info!("VIUI Sandbox starting");
 
-    let mut ui = UIEngine::new()?;
+    let mut ui = UIEngineStarter::new()?;
     let render_backend = FemtovgRenderBackend::new(ui.add_render_backend()?);
     ui.start()?;
     info!("VIUI Sandbox started");

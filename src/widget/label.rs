@@ -5,10 +5,12 @@ use crate::result::ViuiResult;
 use crate::types::{Color, Point, Rect, Size};
 use crate::widget::Widget;
 
+#[derive(Default)]
 pub struct LabelWidget {}
 
 impl Widget for LabelWidget {
     fn render(&self, render_context: &mut RenderContext, props: &Properties) -> ViuiResult<()> {
+        render_context.add_command(RenderCommand::SetFillColor(Color::gray(20)));
         render_context.add_command(RenderCommand::SetStrokeColor(Color::gray(127)));
         let stroke_width = 2.0f32;
         render_context.add_command(RenderCommand::SetStrokeWidth(stroke_width));

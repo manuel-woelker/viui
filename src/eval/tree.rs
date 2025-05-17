@@ -3,15 +3,27 @@ use crate::ast::value::ExpressionValue;
 use crate::ir::node::{IrComponent, IrExpression, IrNode, NodeKind};
 use crate::nodes::data::LayoutInfo;
 use crate::result::ViuiResult;
+use crate::widget::Widget;
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::hash::{BuildHasher, Hash};
 
-#[derive(Debug)]
 pub struct EvalNode {
     tag: String,
     children: Vec<EvalNodeIdx>,
     props: Properties,
     pub layout: LayoutInfo,
+    pub widget: Box<dyn Widget>,
+}
+
+impl Debug for EvalNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EvalNode")
+            .field("tag", &self.tag)
+            .field("children", &self.children)
+            .field("props", &self.props)
+            .finish()
+    }
 }
 
 impl EvalNode {
@@ -107,6 +119,7 @@ fn eval_node(ir_node: &IrNode, arenal: &mut Arenal<EvalNode>) -> ViuiResult<Eval
                 children,
                 props: Properties::new(),
                 layout: Default::default(),
+                widget: ir_node.create_widget()?,
             }))
         }
         NodeKind::Element(element) => Ok(arenal.insert(EvalNode {
@@ -118,6 +131,7 @@ fn eval_node(ir_node: &IrNode, arenal: &mut Arenal<EvalNode>) -> ViuiResult<Eval
                 .map(|prop| Ok((prop.name.clone(), eval_expression(&prop.expression)?)))
                 .collect::<ViuiResult<_>>()?,
             layout: Default::default(),
+            widget: ir_node.create_widget()?,
         })),
         _ => todo!(),
     }
@@ -132,6 +146,7 @@ fn eval_expression(ir_expression: &IrExpression) -> ViuiResult<EvalValue> {
 
 #[cfg(test)]
 mod tests {
+    use crate::arenal::Arenal;
     use crate::ast::parser::parse_ui;
     use crate::ir::node::ast_to_ir;
 
@@ -141,7 +156,8 @@ mod tests {
         let source = std::fs::read_to_string("examples/simple/label.viui-component").unwrap();
         let ast = parse_ui(&source).unwrap();
         let ir = ast_to_ir(&ast).unwrap();
-        let evaled = super::eval_component(&ir[0]).unwrap();
+        let mut arenal = Arenal::new();
+        let evaled = super::eval_component(&ir[0], &mut arenal).unwrap();
         dbg!(evaled);
     }
 }

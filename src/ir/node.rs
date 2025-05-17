@@ -1,6 +1,50 @@
 use crate::ast::nodes::{ComponentAst, ItemDefinition, PropAst, UIAst};
 use crate::ast::value::ExpressionValue;
 use crate::result::ViuiResult;
+use crate::widget::div::DivWidget;
+use crate::widget::Widget;
+use std::collections::HashMap;
+use std::fmt::Debug;
+use std::rc::Rc;
+
+pub trait WidgetFactory {
+    fn create_widget(&self) -> ViuiResult<Box<dyn Widget>>;
+}
+
+pub type WidgetFactoryRef = Rc<dyn WidgetFactory>;
+
+#[derive(Clone)]
+pub struct DefaultWidgetFactory {}
+
+impl WidgetFactory for DefaultWidgetFactory {
+    fn create_widget(&self) -> ViuiResult<Box<dyn Widget>> {
+        Ok(Box::new(DivWidget::default()))
+    }
+}
+
+fn default_widget_factory() -> WidgetFactoryRef {
+    Rc::new(DefaultWidgetFactory {})
+}
+
+#[derive(Default)]
+pub struct WidgetRegistry {
+    widgets: HashMap<String, WidgetFactoryRef>,
+}
+
+impl WidgetRegistry {
+    pub fn get_widget_factory(&self, tag: &str) -> WidgetFactoryRef {
+        self.widgets
+            .get(tag)
+            .cloned()
+            .unwrap_or_else(default_widget_factory)
+    }
+}
+
+impl WidgetRegistry {
+    pub fn register_widget<T: WidgetFactory + 'static>(&mut self, name: String, factory: T) {
+        self.widgets.insert(name, Rc::new(factory));
+    }
+}
 
 #[derive(Debug)]
 pub struct IrComponent {
@@ -8,14 +52,24 @@ pub struct IrComponent {
     pub root: IrNode,
 }
 
-#[derive(Debug)]
 pub struct IrNode {
     kind: NodeKind,
+    widget_factory: WidgetFactoryRef,
+}
+
+impl Debug for IrNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IrNode").field("kind", &self.kind).finish()
+    }
 }
 
 impl IrNode {
     pub fn kind(&self) -> &NodeKind {
         &self.kind
+    }
+
+    pub fn create_widget(&self) -> ViuiResult<Box<dyn Widget>> {
+        self.widget_factory.create_widget()
     }
 }
 #[derive(Debug)]
@@ -71,44 +125,55 @@ pub enum IrExpression {
     },
 }
 
-pub fn ast_to_ir(ui_ast: &UIAst) -> ViuiResult<Vec<IrComponent>> {
+pub fn ast_to_ir(ui_ast: &UIAst, widget_registry: &WidgetRegistry) -> ViuiResult<Vec<IrComponent>> {
     let mut ir = vec![];
     for component in &ui_ast.components {
-        ir.push(ast_component_to_ir(component)?);
+        ir.push(ast_component_to_ir(component, widget_registry)?);
     }
     Ok(ir)
 }
 
-fn ast_component_to_ir(component: &ComponentAst) -> ViuiResult<IrComponent> {
+fn ast_component_to_ir(
+    component: &ComponentAst,
+    widget_registry: &WidgetRegistry,
+) -> ViuiResult<IrComponent> {
     Ok(IrComponent {
         name: component.name.clone(),
         root: IrNode {
+            widget_factory: default_widget_factory(),
             kind: NodeKind::Block(BlockNode {
                 children: component
                     .children
                     .iter()
-                    .map(ast_item_to_ir)
+                    .map(|child| ast_item_to_ir(child, widget_registry))
                     .collect::<ViuiResult<_>>()?,
             }),
         },
     })
 }
 
-fn ast_item_to_ir(item: &crate::ast::nodes::ItemAst) -> ViuiResult<IrNode> {
+fn ast_item_to_ir(
+    item: &crate::ast::nodes::ItemAst,
+    widget_registry: &WidgetRegistry,
+) -> ViuiResult<IrNode> {
     Ok(match item.data() {
         ItemDefinition::Block { items } => {
             todo!("ast_item_to_ir");
         }
-        ItemDefinition::Node { node } => IrNode {
-            kind: NodeKind::Element(ElementNode {
-                name: node.tag.clone(),
-                props: node
-                    .props
-                    .iter()
-                    .map(ast_prop_to_ir)
-                    .collect::<ViuiResult<_>>()?,
-            }),
-        },
+        ItemDefinition::Node { node } => {
+            let widget_factory = widget_registry.get_widget_factory(&node.tag);
+            IrNode {
+                widget_factory,
+                kind: NodeKind::Element(ElementNode {
+                    name: node.tag.clone(),
+                    props: node
+                        .props
+                        .iter()
+                        .map(ast_prop_to_ir)
+                        .collect::<ViuiResult<_>>()?,
+                }),
+            }
+        }
         ItemDefinition::If(_) => {
             todo!("ast_item_to_ir");
         }
@@ -145,7 +210,7 @@ fn ast_expression_to_ir(expression: &crate::ast::nodes::ExpressionAst) -> ViuiRe
 
 #[cfg(test)]
 mod tests {
-    use super::ast_to_ir;
+    use super::{ast_to_ir, WidgetRegistry};
     use crate::ast::parser::parse_ui;
 
     #[test]
@@ -153,7 +218,7 @@ mod tests {
         // read source from file
         let source = std::fs::read_to_string("examples/simple/label.viui-component").unwrap();
         let ast = parse_ui(&source).unwrap();
-        let ir = ast_to_ir(&ast);
+        let ir = ast_to_ir(&ast, &WidgetRegistry::default());
         dbg!(ir);
     }
 }
